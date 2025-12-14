@@ -1,0 +1,1 @@
+New-NetFirewallRule -DisplayName "Ollama Server" -Direction Inbound -LocalPort 11434 -Protocol TCP -Action Allow -Profile Private
