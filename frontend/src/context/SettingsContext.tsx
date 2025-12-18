@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
 interface SettingsContextType {
     isDesktop: boolean;
@@ -80,7 +80,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
         apiKey,
         setApiKey,
         serperKey,
-        serperKey,
+
         setSerperKey, // Uses the wrapper function defined above
     };
 

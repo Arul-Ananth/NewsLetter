@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import AppTheme from './theme/AppTheme'; // Global Theme Wrapper
 import { SettingsProvider } from './context/SettingsContext';

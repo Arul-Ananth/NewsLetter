@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
-from jose import jwt
-from app.config import settings
+import jwt
+from backend.server.config import settings
 
 from passlib.context import CryptContext
 # Use pbkdf2_sha256 which is extremely stable and secure

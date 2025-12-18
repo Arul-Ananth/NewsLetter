@@ -22,7 +22,7 @@ export default function CustomAppBar({ tabIndex, setTabIndex }: CustomAppBarProp
                             Newsroom Agent
                         </Typography>
 
-                        <Tabs value={tabIndex} onChange={(e, val) => setTabIndex(val)} textColor="primary" indicatorColor="primary">
+                        <Tabs value={tabIndex} onChange={(_e, val) => setTabIndex(val)} textColor="primary" indicatorColor="primary">
                             <Tab icon={<NewsIcon />} label="News" />
                             <Tab icon={<BrainIcon />} label="Memory" />
                         </Tabs>

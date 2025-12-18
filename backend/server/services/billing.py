@@ -1,7 +1,7 @@
 import os  # <--- Import OS to check environment variables
 from fastapi import HTTPException
 from sqlmodel import Session
-from app.models.sql import UserWallet, UsageLog
+from backend.server.models.sql import UserWallet, UsageLog
 
 
 def check_funds(session: Session, user_id: int):

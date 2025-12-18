@@ -5,7 +5,7 @@ from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 from typing import Type, Union, Any
-from app.config import settings
+from backend.server.config import settings
 
 
 # --- 1. Robust Tool Definitions ---

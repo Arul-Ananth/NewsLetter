@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
-from app.database import get_session
-from app.dependencies import get_current_user
-from app.models.sql import User
-from app.models.schemas import NewsRequest, NewsResponse, FeedbackRequest
-from app.services import billing, crew_agent, vector_db
-from app.models.sql import User
-from app.dependencies import get_current_user
+from backend.server.database import get_session
+from backend.server.dependencies import get_current_user
+from backend.server.models.sql import User
+from backend.server.models.schemas import NewsRequest, NewsResponse, FeedbackRequest
+from backend.server.services import billing, crew_agent, vector_db
+from backend.server.models.sql import User
+from backend.server.dependencies import get_current_user
 
 router = APIRouter(tags=["News"])
 
