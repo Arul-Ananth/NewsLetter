@@ -45,5 +45,64 @@ export const theme = extendTheme({
                 },
             },
         },
+        MuiFormLabel: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    color: theme.palette.text.secondary,
+                }),
+            },
+        },
+        MuiInputLabel: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    color: theme.palette.text.secondary,
+                    '&.Mui-focused': {
+                        color: theme.palette.text.primary,
+                    },
+                }),
+            },
+        },
+        MuiOutlinedInput: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    backgroundColor:
+                        theme.palette.mode === 'dark'
+                            ? 'rgba(17, 24, 42, 0.85)'
+                            : '#FFFFFF',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: theme.palette.divider,
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: theme.palette.text.secondary,
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: theme.palette.primary.main,
+                        borderWidth: 2,
+                    },
+                }),
+                input: ({ theme }) => ({
+                    color: theme.palette.text.primary,
+                    '::placeholder': {
+                        color: theme.palette.text.secondary,
+                        opacity: 0.8,
+                    },
+                }),
+            },
+        },
+        MuiDivider: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    borderColor: theme.palette.divider,
+                }),
+            },
+        },
+        MuiLink: {
+            styleOverrides: {
+                root: ({ theme }) => ({
+                    color: theme.palette.primary.main,
+                }),
+            },
+        },
     },
+    colorSchemeSelector: 'class',
 });

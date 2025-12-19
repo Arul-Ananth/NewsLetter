@@ -90,7 +90,16 @@ export default function AuthSplitLayout({
                     <Typography variant="h3" sx={{ mb: 2 }}>
                         {heroTitle}
                     </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 4 }}>
+                    <Typography
+                        variant="body1"
+                        sx={(theme) => ({
+                            color:
+                                theme.palette.mode === 'dark'
+                                    ? 'rgba(230, 240, 255, 0.78)'
+                                    : 'rgba(13, 27, 42, 0.7)',
+                            mb: 4,
+                        })}
+                    >
                         {heroBody}
                     </Typography>
                     <NeuralMeshSvg />

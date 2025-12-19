@@ -90,6 +90,7 @@ const Card = styled(MuiCard)(({ theme }) => ({
     gap: theme.spacing(2),
     border: `1px solid ${theme.palette.divider}`,
     background: theme.palette.background.paper,
+    color: theme.palette.text.primary,
     boxShadow: theme.shadows[6],
 }));
 
