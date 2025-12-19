@@ -5,7 +5,6 @@ import { SettingsProvider } from './context/SettingsContext';
 
 import Dashboard from './pages/DashBoard';
 import SignIn from "./pages/SignIn";
-import Box from "@mui/material/Box";
 
 import SignUp from "./pages/SignUp";
 
@@ -15,11 +14,7 @@ export default function App() {
       <SettingsProvider>
         <Router>
           <Routes>
-            <Route path="/" element={
-              <Box sx={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
-                <Dashboard />
-              </Box>
-            } />
+            <Route path="/" element={<Dashboard />} />
 
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />

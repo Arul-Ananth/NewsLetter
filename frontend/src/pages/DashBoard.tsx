@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import {
     Typography, Container, Paper, TextField, Button,
     Card, CardContent, Chip, IconButton, Box, CircularProgress, Alert, Snackbar,
-    CssBaseline, Divider, Grid
+    Divider, Grid
 } from '@mui/material';
 import {
     Send as SendIcon,
@@ -58,7 +58,7 @@ const DashBoard = () => {
         } catch (error: any) {
             console.error(error);
             if (error.message.includes("Credits")) {
-                setErrorMsg("⚠️ " + error.message);
+                setErrorMsg(error.message);
             } else {
                 setErrorMsg("Connection failed. Please check backend terminal for errors.");
             }
@@ -96,7 +96,6 @@ const DashBoard = () => {
     return (
         // FIX: MinHeight set to 100dvh to fill screen on mobile and desktop
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-            <CssBaseline />
             <CustomAppBar tabIndex={tabIndex} setTabIndex={setTabIndex} />
 
             {/* FIX: flexGrow: 1 pushes the bottom of the container to the bottom of the viewport */}
@@ -210,3 +209,4 @@ const DashBoard = () => {
 };
 
 export default DashBoard;
+

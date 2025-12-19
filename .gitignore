@@ -1,14 +1,22 @@
+legacy_archive/
+qdrant_db_local/
+miscellanious/
+system_prompt.md
+dev_ops/
+plans/
+backend/aerobrief_server.db
+
 # ===========================
 # React / Node (newsletter-ui)
 # ===========================
 node_modules/
-newsletter-ui/node_modules/
-newsletter-ui/build/
-newsletter-ui/dist/
-newsletter-ui/out/
-newsletter-ui/.env
-newsletter-ui/.env.local
-newsletter-ui/.env.*.local
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/out/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 
 npm-debug.log*
 yarn-debug.log*

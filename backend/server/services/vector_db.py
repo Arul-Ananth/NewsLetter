@@ -1,11 +1,23 @@
+import os
 import uuid
 from datetime import datetime
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from sentence_transformers import SentenceTransformer
+from backend.server.config import settings, AppMode
 
-# 1. Initialize Qdrant Client (Persistent Local Mode)
-client = QdrantClient(path="./qdrant_db_local")
+# 1. Initialize Qdrant Client (Unified)
+if settings.APP_MODE == AppMode.DESKTOP:
+    # Embedded mode in User Data Dir
+    client = QdrantClient(path=str(settings.DATA_DIR / "qdrant_db"))
+else:
+    # Server mode - assume external URL or local
+    qdrant_url = os.getenv("QDRANT_URL")
+    if qdrant_url:
+        client = QdrantClient(url=qdrant_url)
+    else:
+        # Fallback to local embedded for dev server
+        client = QdrantClient(path="./qdrant_db_local")
 
 # 2. Initialize Embedding Model
 embedder = SentenceTransformer("all-MiniLM-L6-v2")

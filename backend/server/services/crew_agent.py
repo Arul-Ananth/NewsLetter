@@ -68,7 +68,7 @@ def run_newsletter_crew(topic: str, user_context: str, api_keys: dict = None):
         model=ollama_model,
         base_url=ollama_base_url,
         api_key=openai_key,
-        timeout=120,  # Wait up to 2 minutes
+        timeout=300,  # Wait up to 2 minutes
         temperature=0.7
     )
 

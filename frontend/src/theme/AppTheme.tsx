@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { ThemeProvider } from '@mui/material/styles';
+import { CssVarsProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme';
-import Box from '@mui/material/Box';
 
 interface AppThemeProps {
   children: React.ReactNode;
@@ -10,20 +10,9 @@ interface AppThemeProps {
 
 export default function AppTheme({ children }: AppThemeProps) {
   return (
-    <ThemeProvider theme={theme} disableTransitionOnChange>
-      <Box
-        sx={{
-          minHeight: "100vh",
-          width: "100vw",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          bgcolor: "background.default",
-          overflowY: "auto",
-        }}
-      >
-        {children}
-      </Box>
-    </ThemeProvider>
+    <CssVarsProvider theme={theme} defaultMode="dark">
+      <CssBaseline enableColorScheme />
+      {children}
+    </CssVarsProvider>
   );
 }

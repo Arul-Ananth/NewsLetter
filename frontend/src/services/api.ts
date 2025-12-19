@@ -162,12 +162,13 @@ export const api = {
 
         if (!Array.isArray(items)) return [];
 
-        return items.map((item: any) => {
+        return items.map((item: any, index: number) => {
             const meta = item.payload || item.metadata || {};
             const doc = item.payload?.document || item.document || item;
+            const fallbackId = `${meta.topic || 'memory'}-${index}`;
 
             return {
-                id: item.id || Math.random().toString(),
+                id: String(item.id || item.payload?.id || item.metadata?.id || fallbackId),
                 document: doc,
                 metadata: meta
             };

@@ -1,17 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
+import os
 from sqlmodel import Session
 from backend.server.database import get_session
 from backend.server.dependencies import get_current_user
 from backend.server.models.sql import User
 from backend.server.models.schemas import NewsRequest, NewsResponse, FeedbackRequest
-from backend.server.services import billing, crew_agent, vector_db
+from backend.server.services import billing, vector_db
+from backend.server.services.newsletter_service import newsletter_service
 from backend.server.models.sql import User
 from backend.server.dependencies import get_current_user
 
 router = APIRouter(tags=["News"])
 
 @router.post("/generate", response_model=NewsResponse)
-def generate_news(
+async def generate_news(
     request: NewsRequest, 
     current_user: User = Depends(get_current_user), 
     session: Session = Depends(get_session)
@@ -28,22 +30,30 @@ def generate_news(
             "serper_api_key": request.serper_api_key,
             "openai_api_key": request.openai_api_key
         }
-        crew_result = crew_agent.run_newsletter_crew(request.topic, context, api_keys=api_keys)
+        # Use Shared Service Layer
+        result_response = await newsletter_service.generate_newsletter(
+            topic=request.topic, 
+            user_id=current_user.id,
+            context=str(context),
+            api_keys=api_keys
+        )
+        content = result_response.content
+        
+        # Estimate usage (mock for now or derive from response if added)
+        input_tok = 100 
+        output_tok = 100 
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
     # 4. CALCULATE TOKENS & DEDUCT FUNDS
-    usage = crew_result.token_usage
-    input_tok = usage.prompt_tokens
-    output_tok = usage.completion_tokens
-    
     receipt = billing.process_transaction(
         session, current_user.id, request.topic, input_tok, output_tok
     )
     
     return {
         "topic": request.topic,
-        "content": str(crew_result.raw),
+        "content": content,
         "bill": receipt
     }
 

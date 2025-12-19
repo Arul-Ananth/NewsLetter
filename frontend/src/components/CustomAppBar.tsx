@@ -14,7 +14,7 @@ export default function CustomAppBar({ tabIndex, setTabIndex }: CustomAppBarProp
 
     return (
         <>
-            <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+            <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Container maxWidth="lg">
                     <Toolbar disableGutters>
                         <BotIcon sx={{ mr: 1, color: 'primary.main' }} />
