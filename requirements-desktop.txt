@@ -1,0 +1,6 @@
+-r requirements.txt
+PySide6
+qasync
+keyring
+duckduckgo-search
+trafilatura

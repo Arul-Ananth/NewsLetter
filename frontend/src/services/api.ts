@@ -58,7 +58,7 @@ export const api = {
     // --- Auth ---
 
     signup: async (fullName: string, email: string, password: string): Promise<SignupResponse> => {
-        const response = await fetch(`${API_BASE_URL}/signup`, {
+        const response = await fetch(`${API_BASE_URL}/auth/signup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -74,7 +74,7 @@ export const api = {
     },
 
     login: async (email: string, password: string): Promise<LoginResponse> => {
-        const response = await fetch(`${API_BASE_URL}/login`, {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
@@ -113,7 +113,7 @@ export const api = {
         const userId = api.getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        const response = await fetch(`${API_BASE_URL}/generate`, {
+        const response = await fetch(`${API_BASE_URL}/news/generate`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
@@ -135,11 +135,10 @@ export const api = {
     sendFeedback: async (originalTopic: string, feedbackText: string, sentiment: string): Promise<void> => {
         const userId = api.getCurrentUserId();
 
-        await fetch(`${API_BASE_URL}/feedback`, {
+        await fetch(`${API_BASE_URL}/news/feedback`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
-                user_id: userId,
                 original_topic: originalTopic,
                 feedback_text: feedbackText,
                 sentiment: sentiment
@@ -151,7 +150,7 @@ export const api = {
         const userId = api.getCurrentUserId();
         if (!userId) throw new Error("User not logged in");
 
-        const response = await fetch(`${API_BASE_URL}/profile/${userId}`, {
+        const response = await fetch(`${API_BASE_URL}/news/profile/${userId}`, {
             headers: getAuthHeaders()
         });
 

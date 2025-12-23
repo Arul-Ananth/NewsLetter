@@ -1,0 +1,14 @@
+﻿crewai
+pydantic
+pydantic-settings
+email-validator
+litellm
+requests
+PyJWT
+passlib
+sqlmodel
+qdrant-client
+sentence-transformers
+
+fastapi
+uvicorn

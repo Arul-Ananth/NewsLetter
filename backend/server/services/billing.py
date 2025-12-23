@@ -1,14 +1,13 @@
-import os  # <--- Import OS to check environment variables
-from fastapi import HTTPException
+﻿from fastapi import HTTPException
 from sqlmodel import Session
-from backend.server.models.sql import UserWallet, UsageLog
+
+from backend.common.config import AppMode, settings
+from backend.common.models.sql import UsageLog, UserWallet
 
 
 def check_funds(session: Session, user_id: int):
-    # --- SKIP FOR DESKTOP APP ---
-    if os.environ.get("APP_MODE") == "desktop":
-        return None  # Return None means "Allowed" in this context
-    # ----------------------------
+    if settings.APP_MODE == AppMode.DESKTOP:
+        return None
 
     wallet = session.get(UserWallet, user_id)
     if not wallet or wallet.balance <= 0:
@@ -17,27 +16,22 @@ def check_funds(session: Session, user_id: int):
 
 
 def process_transaction(session: Session, user_id: int, topic: str, input_tok: int, output_tok: int):
-    # --- SKIP FOR DESKTOP APP ---
-    if os.environ.get("APP_MODE") == "desktop":
+    if settings.APP_MODE == AppMode.DESKTOP:
         return {"deducted": 0, "remaining": "Unlimited"}
-    # ----------------------------
 
-    # Pricing Strategy: Output is 3x more expensive
     cost = input_tok + (output_tok * 3)
 
-    # Update Wallet
     wallet = session.get(UserWallet, user_id)
     if wallet:
         wallet.balance -= cost
         session.add(wallet)
 
-    # Log Transaction
     log = UsageLog(
         user_id=user_id,
         topic=topic,
         input_tokens=input_tok,
         output_tokens=output_tok,
-        total_cost=cost
+        total_cost=cost,
     )
 
     session.add(log)
