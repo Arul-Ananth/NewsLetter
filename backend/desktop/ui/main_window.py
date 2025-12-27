@@ -1,5 +1,6 @@
 import logging
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QLabel,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
 from qasync import asyncSlot
 
 from backend.common.services.newsletter_service import newsletter_service
+from backend.desktop.telemetry_manager import TelemetryManager
 from backend.desktop.security import get_secret
 from backend.desktop.ui.settings_dialog import SettingsDialog
 
@@ -21,11 +23,13 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, session_id: str):
         super().__init__()
         self.user_id = user_id
+        self.session_id = session_id
         self.setWindowTitle("AeroBrief AI Newsletter")
         self.resize(900, 700)
+        self.setAcceptDrops(True)
 
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(toolbar)
@@ -58,6 +62,9 @@ class MainWindow(QMainWindow):
         self.output_area.setReadOnly(True)
         layout.addWidget(self.output_area)
 
+        self.telemetry = TelemetryManager(user_id=user_id, session_id=session_id, output=self.output_area)
+        QTimer.singleShot(0, self.telemetry.start)
+
     def open_settings(self) -> None:
         dlg = SettingsDialog(self)
         dlg.exec()
@@ -71,6 +78,9 @@ class MainWindow(QMainWindow):
             self.output_area.setText("Please enter a topic.")
             return
 
+        self.telemetry.flush_output_time()
+        self.telemetry.emit_generation(topic, context)
+
         self.generate_btn.setEnabled(False)
         self.output_area.setText(f"Starting research on '{topic}'... This may take a minute.")
 
@@ -79,10 +89,31 @@ class MainWindow(QMainWindow):
                 "openai_api_key": get_secret("openai_api_key"),
                 "serper_api_key": get_secret("serper_api_key"),
             }
-            result = await newsletter_service.generate_newsletter(topic, self.user_id, context, api_keys)
+            result = await newsletter_service.generate_newsletter(
+                topic, self.user_id, context, api_keys, session_id=self.session_id
+            )
             self.output_area.setMarkdown(result.content)
+            self.telemetry.mark_output_start()
         except Exception as exc:
             logger.exception("Newsletter generation failed: %s", exc)
             self.output_area.setText("Error occurred while generating the newsletter.")
         finally:
             self.generate_btn.setEnabled(True)
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:
+        if not event.mimeData().hasUrls():
+            return
+        paths = [url.toLocalFile() for url in event.mimeData().urls()]
+        self.telemetry.handle_file_drop(paths)
+
+    def closeEvent(self, event) -> None:
+        self.telemetry.flush_output_time()
+        self.telemetry.emit_session_end()
+        self.telemetry.shutdown()
+        super().closeEvent(event)

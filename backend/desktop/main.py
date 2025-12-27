@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 import qasync
@@ -62,7 +63,8 @@ def main() -> None:
     create_db_and_tables()
     user_id = ensure_local_user()
 
-    window = MainWindow(user_id=user_id)
+    session_id = uuid.uuid4().hex
+    window = MainWindow(user_id=user_id, session_id=session_id)
     window.show()
 
     with loop:

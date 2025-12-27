@@ -20,12 +20,31 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # AI / External Services
-    OPENAI_API_BASE: str = "http://localhost:11434/v1/openai"
+    LLM_PROVIDER: str | None = None
+    OPENAI_API_BASE: str = ""
     OPENAI_MODEL_NAME: str = "mistral:latest"
+    OPENAI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
     SERPER_API_KEY: str = ""  # Optional
 
     # Data Storage
     DATA_DIR: Path = Path("./data")
+
+    # Desktop Data Collection
+    DATA_COLLECTION_ENABLED: bool = True
+    CLIPBOARD_COLLECTION_ENABLED: bool = True
+    FOLDER_WATCH_ENABLED: bool = False
+    MIN_CLIPBOARD_CHARS: int = 20
+    DOC_MAX_MB: int = 10
+    CHUNK_SIZE: int = 800
+    CHUNK_OVERLAP: int = 200
+    QDRANT_COLLECTION_USER_DOCS: str = "user_documents"
+    QDRANT_COLLECTION_SESSION_MEMORY: str = "session_memory"
+    QDRANT_COLLECTION_USER_PROFILE: str = "user_profile"
+    RETENTION_DAYS_EVENTS_RAW: int = 14
+    EVENT_QUEUE_MAX: int = 500
+    DEDUPE_WINDOW_SECONDS: int = 120
+    PROFILE_ROLLUP_EVERY: int = 5
 
     model_config = SettingsConfigDict(env_file=str(Path(__file__).resolve().parents[2] / ".env"), extra="ignore")
 

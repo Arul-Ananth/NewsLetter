@@ -4,3 +4,6 @@ qasync
 keyring
 duckduckgo-search
 trafilatura
+lxml
+watchdog
+lxml

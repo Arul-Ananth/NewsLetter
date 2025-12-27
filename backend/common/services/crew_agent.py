@@ -42,17 +42,38 @@ search_tool = CrewWebSearchTool()
 
 
 def run_newsletter_crew(topic: str, user_context: str, api_keys: dict | None = None) -> Any:
-    ollama_base_url = settings.OPENAI_API_BASE
-    ollama_model = settings.OPENAI_MODEL_NAME
-
     api_keys = api_keys or {}
     serper_key = api_keys.get("serper_api_key") or settings.SERPER_API_KEY
-    openai_key = api_keys.get("openai_api_key") or "NA"
+
+    provider = (settings.LLM_PROVIDER or "").strip().lower()
+    if not provider:
+        raise ValueError("LLM_PROVIDER is not set. Use 'ollama', 'openai', or 'google' in .env.")
+
+    if provider == "openai":
+        openai_key = api_keys.get("openai_api_key") or settings.OPENAI_API_KEY
+        if not openai_key:
+            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai.")
+        model = settings.OPENAI_MODEL_NAME
+        base_url = settings.OPENAI_API_BASE or "https://api.openai.com/v1"
+        api_key = openai_key
+    elif provider == "google":
+        gemini_key = api_keys.get("gemini_api_key") or settings.GEMINI_API_KEY
+        if not gemini_key:
+            raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=google.")
+        model = settings.OPENAI_MODEL_NAME
+        base_url = settings.OPENAI_API_BASE or ""
+        api_key = gemini_key
+    elif provider == "ollama":
+        model = f"ollama/{settings.OPENAI_MODEL_NAME.split(':')[0]}"
+        base_url = settings.OPENAI_API_BASE or "http://localhost:11434"
+        api_key = "NA"
+    else:
+        raise ValueError("LLM_PROVIDER must be 'ollama', 'openai', or 'google'.")
 
     llm = LLM(
-        model=ollama_model,
-        base_url=ollama_base_url,
-        api_key=openai_key,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
         timeout=300,
         temperature=0.7,
     )
