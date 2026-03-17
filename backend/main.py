@@ -33,11 +33,9 @@ def start_server() -> None:
         app.include_router(auth.router, prefix="/auth")
         app.include_router(news.router, prefix="/news")
 
-        origins = ["http://localhost:5173"]
-
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=origins,
+            allow_origins=settings.cors_origins(),
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -45,8 +43,8 @@ def start_server() -> None:
 
         uvicorn.run(
             app,
-            host="127.0.0.1",
-            port=8000,
+            host=settings.SERVER_HOST,
+            port=settings.SERVER_PORT,
             reload=False,
             workers=1,
         )

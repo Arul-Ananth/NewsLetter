@@ -6,4 +6,8 @@ duckduckgo-search
 trafilatura
 lxml
 watchdog
-lxml
+qt-material
+easyocr
+Pillow
+pypdf
+python-docx

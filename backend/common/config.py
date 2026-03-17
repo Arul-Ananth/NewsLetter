@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str | None = None
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    SERVER_HOST: str = "127.0.0.1"
+    SERVER_PORT: int = 8000
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:5173"
 
     # AI / External Services
     LLM_PROVIDER: str | None = None
@@ -32,7 +35,7 @@ class Settings(BaseSettings):
 
     # Desktop Data Collection
     DATA_COLLECTION_ENABLED: bool = True
-    CLIPBOARD_COLLECTION_ENABLED: bool = True
+    CLIPBOARD_COLLECTION_ENABLED: bool = False
     FOLDER_WATCH_ENABLED: bool = False
     MIN_CLIPBOARD_CHARS: int = 20
     DOC_MAX_MB: int = 10
@@ -47,6 +50,10 @@ class Settings(BaseSettings):
     PROFILE_ROLLUP_EVERY: int = 5
 
     model_config = SettingsConfigDict(env_file=str(Path(__file__).resolve().parents[2] / ".env"), extra="ignore")
+
+    def cors_origins(self) -> list[str]:
+        origins = [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
+        return origins or ["http://localhost:5173"]
 
     def configure(self) -> None:
         """Set DATA_DIR based on APP_MODE and ensure it exists."""

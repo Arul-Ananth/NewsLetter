@@ -16,7 +16,7 @@ from backend.common.database import engine
 from backend.common.models.sql import DerivedMemory, EventRaw, FilesIndex
 from backend.common.services.telemetry.event_bus import EventBus, EventPriority, TelemetryEvent
 from backend.common.services.telemetry.ingestion import chunk_text, extract_text_from_file, file_sha256
-from backend.common.services.vector_db import client, embedder, ensure_collection
+from backend.common.services.memory.vector_db import client, embedder, ensure_collection
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +163,7 @@ class SessionSummaryWorker:
         summary = _build_session_summary(event.session_id)
         if not summary:
             return
+        user_id = _coerce_user_id(event.payload.get("user_id"))
 
         ensure_collection(settings.QDRANT_COLLECTION_SESSION_MEMORY)
         vector = embedder.encode(summary).tolist()
@@ -176,7 +177,7 @@ class SessionSummaryWorker:
                     vector=vector,
                     payload={
                         "document": summary,
-                        "user_id": str(event.payload.get("user_id", "")),
+                        "user_id": str(user_id) if user_id >= 0 else "",
                         "session_id": event.session_id,
                         "timestamp": datetime.utcnow().isoformat(),
                     },
@@ -186,6 +187,7 @@ class SessionSummaryWorker:
 
         with Session(engine) as session:
             memory = DerivedMemory(
+                user_id=user_id,
                 memory_type="session_summary",
                 source_refs=json.dumps({"session_id": event.session_id, "event_type": event.event_type}),
                 summary_text=summary,
@@ -194,7 +196,8 @@ class SessionSummaryWorker:
             session.add(memory)
             session.commit()
 
-        await self.profile_worker.maybe_rollup(event.payload.get("user_id"))
+        if user_id >= 0:
+            await self.profile_worker.maybe_rollup(user_id)
 
 
 class UserProfileRollupWorker:
@@ -202,17 +205,24 @@ class UserProfileRollupWorker:
         self._lock = asyncio.Lock()
 
     async def maybe_rollup(self, user_id: int | None) -> None:
-        if not user_id:
+        resolved_user_id = _coerce_user_id(user_id)
+        if resolved_user_id < 0:
             return
         async with self._lock:
             with Session(engine) as session:
                 summary_count = session.exec(
                     select(DerivedMemory)
-                    .where(DerivedMemory.memory_type == "session_summary")
+                    .where(
+                        DerivedMemory.memory_type == "session_summary",
+                        DerivedMemory.user_id == resolved_user_id,
+                    )
                     .order_by(DerivedMemory.ts)
                 ).all()
                 profile_count = session.exec(
-                    select(DerivedMemory).where(DerivedMemory.memory_type == "user_profile")
+                    select(DerivedMemory).where(
+                        DerivedMemory.memory_type == "user_profile",
+                        DerivedMemory.user_id == resolved_user_id,
+                    )
                 ).all()
 
             if len(summary_count) < settings.PROFILE_ROLLUP_EVERY:
@@ -235,7 +245,7 @@ class UserProfileRollupWorker:
                         vector=vector,
                         payload={
                             "document": profile_text,
-                            "user_id": str(user_id),
+                            "user_id": str(resolved_user_id),
                             "timestamp": datetime.utcnow().isoformat(),
                         },
                     )
@@ -244,6 +254,7 @@ class UserProfileRollupWorker:
 
             with Session(engine) as session:
                 memory = DerivedMemory(
+                    user_id=resolved_user_id,
                     memory_type="user_profile",
                     source_refs=json.dumps({"rollup": settings.PROFILE_ROLLUP_EVERY}),
                     summary_text=profile_text,
@@ -264,6 +275,13 @@ def _hash_payload(event: TelemetryEvent) -> str:
     }
     raw = json.dumps(payload, sort_keys=True)
     return uuid.uuid5(uuid.NAMESPACE_DNS, raw).hex
+
+
+def _coerce_user_id(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
 
 
 def _is_duplicate(session: Session, content_hash: str) -> bool:

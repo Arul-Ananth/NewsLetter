@@ -1,4 +1,11 @@
+import sys
+from pathlib import Path
+
 from sqlmodel import Session
+
+root = Path(__file__).resolve().parents[2]
+if str(root) not in sys.path:
+    sys.path.append(str(root))
 
 from backend.common.database import create_db_and_tables, engine
 from backend.common.models.sql import DerivedMemory, EventRaw, FilesIndex, FolderConsent

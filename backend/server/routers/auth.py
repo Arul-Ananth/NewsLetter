@@ -4,7 +4,11 @@ from sqlmodel import Session, select
 from backend.common.database import get_session
 from backend.common.models.schemas import Token, UserLogin, UserSignup
 from backend.common.models.sql import User, UserWallet
-from backend.common.services.auth_utils import create_access_token, get_password_hash, verify_password
+from backend.common.services.auth.auth_utils import (
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
 
 router = APIRouter(tags=["Auth"])
 

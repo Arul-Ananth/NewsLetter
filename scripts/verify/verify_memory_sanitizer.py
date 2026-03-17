@@ -1,4 +1,11 @@
-from backend.common.services.memory_sanitizer import sanitize_memory_context
+import sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[2]
+if str(root) not in sys.path:
+    sys.path.append(str(root))
+
+from backend.common.services.memory.memory_sanitizer import sanitize_memory_context
 
 
 def main() -> None:

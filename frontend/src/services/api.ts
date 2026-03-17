@@ -1,6 +1,6 @@
 import { jwtDecode } from "jwt-decode";
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 // --- Interfaces ---
 export interface NewsletterResponse {
@@ -133,9 +133,7 @@ export const api = {
     },
 
     sendFeedback: async (originalTopic: string, feedbackText: string, sentiment: string): Promise<void> => {
-        const userId = api.getCurrentUserId();
-
-        await fetch(`${API_BASE_URL}/news/feedback`, {
+        const response = await fetch(`${API_BASE_URL}/news/feedback`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
@@ -144,6 +142,10 @@ export const api = {
                 sentiment: sentiment
             }),
         });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || 'Feedback submission failed');
+        }
     },
 
     getProfile: async (): Promise<Memory[]> => {

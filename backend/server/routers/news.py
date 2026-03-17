@@ -6,8 +6,8 @@ from sqlmodel import Session
 from backend.common.database import get_session
 from backend.common.models.schemas import FeedbackRequest, NewsRequest, NewsResponse
 from backend.common.models.sql import User
-from backend.common.services import vector_db
-from backend.common.services.newsletter_service import newsletter_service
+from backend.common.services.llm.newsletter_service import newsletter_service
+from backend.common.services.memory import vector_db
 from backend.server.dependencies import get_current_user
 from backend.server.services import billing
 

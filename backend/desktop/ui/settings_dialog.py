@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -12,6 +13,12 @@ from PySide6.QtWidgets import (
 )
 
 from backend.common.services.telemetry.consent import add_folder_consent
+from backend.desktop.preferences import (
+    get_clipboard_collection_enabled,
+    get_data_collection_enabled,
+    set_clipboard_collection_enabled,
+    set_data_collection_enabled,
+)
 from backend.desktop.security import get_secret, set_secret
 
 
@@ -40,6 +47,16 @@ class SettingsDialog(QDialog):
         self.add_folder_btn.clicked.connect(self.add_folder)
         layout.addWidget(self.add_folder_btn)
 
+        self.data_collection_checkbox = QCheckBox("Enable desktop telemetry data collection")
+        self.data_collection_checkbox.setChecked(get_data_collection_enabled())
+        self.data_collection_checkbox.toggled.connect(self._on_data_collection_toggled)
+        layout.addWidget(self.data_collection_checkbox)
+
+        self.clipboard_collection_checkbox = QCheckBox("Enable clipboard collection (opt-in)")
+        self.clipboard_collection_checkbox.setChecked(get_clipboard_collection_enabled())
+        layout.addWidget(self.clipboard_collection_checkbox)
+        self._on_data_collection_toggled(self.data_collection_checkbox.isChecked())
+
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.save_settings)
         buttons.rejected.connect(self.reject)
@@ -54,7 +71,10 @@ class SettingsDialog(QDialog):
         if serper_key:
             set_secret("serper_api_key", serper_key)
 
-        QMessageBox.information(self, "Settings", "Keys saved securely.")
+        set_data_collection_enabled(self.data_collection_checkbox.isChecked())
+        set_clipboard_collection_enabled(self.clipboard_collection_checkbox.isChecked())
+
+        QMessageBox.information(self, "Settings", "Settings saved.")
         self.accept()
 
     def add_folder(self) -> None:
@@ -63,3 +83,8 @@ class SettingsDialog(QDialog):
             return
         add_folder_consent(Path(folder))
         QMessageBox.information(self, "Settings", "Folder consent saved.")
+
+    def _on_data_collection_toggled(self, enabled: bool) -> None:
+        self.clipboard_collection_checkbox.setEnabled(enabled)
+        if not enabled:
+            self.clipboard_collection_checkbox.setChecked(False)

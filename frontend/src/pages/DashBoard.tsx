@@ -19,7 +19,7 @@ import CustomAppBar from '../components/CustomAppBar';
 
 import { useSettings } from '../context/SettingsContext';
 
-const DashBoard = () => {
+const Dashboard = () => {
     const navigate = useNavigate();
     const { isLocalMode, apiKey, serperKey } = useSettings();
     const [topic, setTopic] = useState('');
@@ -208,5 +208,5 @@ const DashBoard = () => {
     );
 };
 
-export default DashBoard;
+export default Dashboard;
 

@@ -47,6 +47,7 @@ class FilesIndex(SQLModel, table=True):
 
 class DerivedMemory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=-1, index=True)
     memory_type: str = Field(index=True, max_length=64)
     ts: datetime = Field(default_factory=datetime.utcnow, index=True)
     source_refs: str
