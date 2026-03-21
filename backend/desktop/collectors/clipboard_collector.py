@@ -19,19 +19,40 @@ URL_REGEX = re.compile(r"(https?://\S+)")
 
 
 class ClipboardCollector(QObject):
-    def __init__(self, clipboard: QClipboard, session_id: str, emit: Callable[[TelemetryEvent], None]) -> None:
+    def __init__(
+        self,
+        clipboard: QClipboard,
+        session_id: str,
+        user_id: int,
+        emit: Callable[[TelemetryEvent], None],
+    ) -> None:
         super().__init__()
         self.clipboard = clipboard
         self.session_id = session_id
+        self.user_id = user_id
         self.emit = emit
         self._last_hash = ""
         self._last_ts = 0.0
+        self._connected = False
 
-    def start(self) -> None:
-        if not settings.CLIPBOARD_COLLECTION_ENABLED:
+    def start(self, enabled: bool | None = None) -> None:
+        allowed = settings.CLIPBOARD_COLLECTION_ENABLED if enabled is None else enabled
+        if not allowed:
             logger.info("Clipboard collection disabled.")
             return
+        if self._connected:
+            return
         self.clipboard.dataChanged.connect(self._on_clipboard_change)
+        self._connected = True
+
+    def stop(self) -> None:
+        if not self._connected:
+            return
+        try:
+            self.clipboard.dataChanged.disconnect(self._on_clipboard_change)
+        except Exception:
+            pass
+        self._connected = False
 
     def _on_clipboard_change(self) -> None:
         now = time.time()
@@ -47,10 +68,13 @@ class ClipboardCollector(QObject):
 
         url_match = URL_REGEX.search(text)
         payload = {
-            "text": text,
+            "user_id": self.user_id,
             "url": url_match.group(1) if url_match else "",
+            "content_hash": content_hash,
             "ts": datetime.utcnow().isoformat(),
         }
+        if settings.CLIPBOARD_STORE_RAW_TEXT:
+            payload["text"] = text
         event = TelemetryEvent(
             event_type="clipboard",
             session_id=self.session_id,

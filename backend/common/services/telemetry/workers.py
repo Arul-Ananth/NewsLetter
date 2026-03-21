@@ -16,7 +16,7 @@ from backend.common.database import engine
 from backend.common.models.sql import DerivedMemory, EventRaw, FilesIndex
 from backend.common.services.telemetry.event_bus import EventBus, EventPriority, TelemetryEvent
 from backend.common.services.telemetry.ingestion import chunk_text, extract_text_from_file, file_sha256
-from backend.common.services.memory.vector_db import client, embedder, ensure_collection
+from backend.common.services.memory.vector_db import client, ensure_collection, get_embedder
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class DocumentIngestionWorker:
             return
 
         ensure_collection(settings.QDRANT_COLLECTION_USER_DOCS)
-        vectors = embedder.encode(chunks).tolist()
+        vectors = get_embedder().encode(chunks).tolist()
         points = []
         for idx, vector in enumerate(vectors):
             points.append(
@@ -166,7 +166,7 @@ class SessionSummaryWorker:
         user_id = _coerce_user_id(event.payload.get("user_id"))
 
         ensure_collection(settings.QDRANT_COLLECTION_SESSION_MEMORY)
-        vector = embedder.encode(summary).tolist()
+        vector = get_embedder().encode(summary).tolist()
         point_id = str(uuid.uuid4())
 
         client.upsert(
@@ -234,7 +234,7 @@ class UserProfileRollupWorker:
             profile_text = "User profile rollup:\n" + "\n".join(summary_texts)
 
             ensure_collection(settings.QDRANT_COLLECTION_USER_PROFILE)
-            vector = embedder.encode(profile_text).tolist()
+            vector = get_embedder().encode(profile_text).tolist()
             point_id = str(uuid.uuid4())
 
             client.upsert(
@@ -339,6 +339,8 @@ def _build_session_summary(session_id: str) -> str:
             text = payload.get("text", "")
             if text:
                 clipboard_items.append(text[:200])
+            elif payload.get("content_hash"):
+                clipboard_items.append(f"hash:{payload['content_hash'][:12]}")
         if event.event_type == "file_ingestion":
             file_events.append(payload.get("path", ""))
         if event.event_type == "telemetry_scroll":

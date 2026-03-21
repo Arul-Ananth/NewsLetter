@@ -1,7 +1,8 @@
 import React from 'react';
-import { AppBar, Toolbar, Typography, Container, Tabs, Tab, Button, Box } from '@mui/material';
-import { SmartToy as BotIcon, Psychology as BrainIcon, Newspaper as NewsIcon, Logout as LogoutIcon, Settings as SettingsIcon } from '@mui/icons-material';
-import { api } from '../services/api';
+import { AppBar, Toolbar, Typography, Container, Tabs, Tab, Button, Box, Chip } from '@mui/material';
+import { SmartToy as BotIcon, Psychology as BrainIcon, Newspaper as NewsIcon, Settings as SettingsIcon } from '@mui/icons-material';
+
+import { useAuth } from '../features/auth/AuthProvider';
 import SettingsDialog from './SettingsDialog';
 
 interface CustomAppBarProps {
@@ -11,6 +12,8 @@ interface CustomAppBarProps {
 
 export default function CustomAppBar({ tabIndex, setTabIndex }: CustomAppBarProps) {
     const [settingsOpen, setSettingsOpen] = React.useState(false);
+    const { status, logout } = useAuth();
+    const trustedLan = status?.trusted_lan_mode;
 
     return (
         <>
@@ -28,19 +31,18 @@ export default function CustomAppBar({ tabIndex, setTabIndex }: CustomAppBarProp
                         </Tabs>
 
                         <Box sx={{ ml: 2, display: 'flex', gap: 1 }}>
-                            <Button
-                                color="inherit"
-                                startIcon={<SettingsIcon />}
-                                onClick={() => setSettingsOpen(true)}
-                            >
+                            <Chip
+                                label={trustedLan ? 'Trusted LAN' : status?.provider || 'Interactive Auth'}
+                                color="primary"
+                                variant="outlined"
+                            />
+                            {!trustedLan && (
+                                <Button color="inherit" onClick={() => void logout()}>
+                                    Sign out
+                                </Button>
+                            )}
+                            <Button color="inherit" startIcon={<SettingsIcon />} onClick={() => setSettingsOpen(true)}>
                                 Settings
-                            </Button>
-                            <Button
-                                color="inherit"
-                                startIcon={<LogoutIcon />}
-                                onClick={api.logout}
-                            >
-                                Logout
                             </Button>
                         </Box>
                     </Toolbar>

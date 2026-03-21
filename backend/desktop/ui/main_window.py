@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         status_queue=None,
         api_process=None,
         api_stop_event=None,
+        bridge_token: str | None = None,
         bridge_warning: str | None = None,
     ) -> None:
         super().__init__()
@@ -45,6 +46,7 @@ class MainWindow(QMainWindow):
         self._status_queue = status_queue
         self._api_process = api_process
         self._api_stop_event = api_stop_event
+        self._bridge_token = bridge_token
         self._bridge_started = False
         self._bridge_disabled = False
         self._bridge_deadline = None
@@ -122,7 +124,7 @@ class MainWindow(QMainWindow):
             self.signal_bus.status_message.emit("Browser bridge disabled for this session.")
 
     def open_settings(self) -> None:
-        dlg = SettingsDialog(self)
+        dlg = SettingsDialog(self, on_saved=self.telemetry.reload_preferences)
         dlg.exec()
 
     def start_generation(self) -> None:

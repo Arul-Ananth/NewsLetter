@@ -9,6 +9,7 @@ _APP_NAME = "AeroBrief"
 
 _KEY_DATA_COLLECTION_ENABLED = "telemetry/data_collection_enabled"
 _KEY_CLIPBOARD_COLLECTION_ENABLED = "telemetry/clipboard_collection_enabled"
+_KEY_CLIPBOARD_STORE_RAW_TEXT = "telemetry/clipboard_store_raw_text"
 
 
 def _store() -> QSettings:
@@ -41,3 +42,12 @@ def get_clipboard_collection_enabled() -> bool:
 
 def set_clipboard_collection_enabled(enabled: bool) -> None:
     _store().setValue(_KEY_CLIPBOARD_COLLECTION_ENABLED, bool(enabled))
+
+
+def get_clipboard_store_raw_text_enabled() -> bool:
+    raw = _store().value(_KEY_CLIPBOARD_STORE_RAW_TEXT, None)
+    return _to_bool(raw, settings.CLIPBOARD_STORE_RAW_TEXT)
+
+
+def set_clipboard_store_raw_text_enabled(enabled: bool) -> None:
+    _store().setValue(_KEY_CLIPBOARD_STORE_RAW_TEXT, bool(enabled))

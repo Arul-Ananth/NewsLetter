@@ -4,8 +4,8 @@ pydantic-settings
 email-validator
 litellm
 requests
-PyJWT
 passlib
+argon2-cffi
 sqlmodel
 qdrant-client
 sentence-transformers

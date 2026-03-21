@@ -1,6 +1,7 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -9,6 +10,35 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True, max_length=255)
     full_name: str = Field(max_length=100)
     hashed_password: str
+
+
+class AuthIdentity(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("provider", "subject", name="uq_authidentity_provider_subject"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    provider: str = Field(index=True, max_length=64)
+    subject: str = Field(max_length=255)
+    email: str | None = Field(default=None, index=True, max_length=255)
+    password_hash: str | None = None
+    is_active: bool = Field(default=True)
+    is_synthetic: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AuthSession(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("token_hash", name="uq_authsession_token_hash"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    identity_id: int = Field(foreign_key="authidentity.id", index=True)
+    transport: str = Field(default="bearer_session", max_length=64)
+    token_hash: str = Field(max_length=64, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(index=True)
+    last_used_at: datetime = Field(default_factory=datetime.utcnow)
+    revoked_at: datetime | None = None
 
 
 class UserWallet(SQLModel, table=True):
@@ -58,3 +88,8 @@ class DerivedMemory(SQLModel, table=True):
 class FolderConsent(SQLModel, table=True):
     path: str = Field(primary_key=True, max_length=512)
     granted_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SchemaMigration(SQLModel, table=True):
+    migration_id: str = Field(primary_key=True, max_length=128)
+    applied_at: datetime = Field(default_factory=datetime.utcnow)

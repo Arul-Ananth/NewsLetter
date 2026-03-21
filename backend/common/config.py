@@ -12,6 +12,11 @@ class AppMode(str, Enum):
     DESKTOP = "DESKTOP"
 
 
+class AuthMode(str, Enum):
+    TRUSTED_LAN = "trusted_lan"
+    INTERACTIVE = "interactive"
+
+
 class Settings(BaseSettings):
     # Core
     APP_MODE: AppMode = AppMode.SERVER
@@ -21,6 +26,11 @@ class Settings(BaseSettings):
     SERVER_HOST: str = "127.0.0.1"
     SERVER_PORT: int = 8000
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173"
+    TRUSTED_LAN_MODE: bool = True
+    AUTH_MODE: AuthMode | None = None
+    TRUSTED_LAN_USER_EMAIL: str = "local@lan"
+    TRUSTED_LAN_USER_NAME: str = "Trusted LAN User"
+    AUTH_SESSION_EXPIRE_MINUTES: int = 720
 
     # AI / External Services
     LLM_PROVIDER: str | None = None
@@ -36,6 +46,7 @@ class Settings(BaseSettings):
     # Desktop Data Collection
     DATA_COLLECTION_ENABLED: bool = True
     CLIPBOARD_COLLECTION_ENABLED: bool = False
+    CLIPBOARD_STORE_RAW_TEXT: bool = False
     FOLDER_WATCH_ENABLED: bool = False
     MIN_CLIPBOARD_CHARS: int = 20
     DOC_MAX_MB: int = 10
@@ -54,6 +65,16 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         origins = [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
         return origins or ["http://localhost:5173"]
+
+    def auth_mode(self) -> AuthMode:
+        if self.APP_MODE == AppMode.DESKTOP:
+            return AuthMode.TRUSTED_LAN
+        if self.AUTH_MODE is not None:
+            return self.AUTH_MODE
+        return AuthMode.TRUSTED_LAN if self.TRUSTED_LAN_MODE else AuthMode.INTERACTIVE
+
+    def is_trusted_lan_auth(self) -> bool:
+        return self.auth_mode() == AuthMode.TRUSTED_LAN
 
     def configure(self) -> None:
         """Set DATA_DIR based on APP_MODE and ensure it exists."""

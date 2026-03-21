@@ -4,7 +4,6 @@ import asyncio
 import logging
 
 from PySide6.QtCore import QThread, Signal
-from sentence_transformers import SentenceTransformer
 
 from backend.common.services.llm.newsletter_service import newsletter_service
 
@@ -32,41 +31,12 @@ class AIWorker(QThread):
         self.session_id = session_id
         self.api_keys = api_keys
         self._cancelled = False
-        self._embedder = None
 
     def cancel(self) -> None:
         self._cancelled = True
         self.requestInterruption()
 
-    def _select_device(self) -> str:
-        try:
-            import torch
-
-            if torch.cuda.is_available():
-                return "cuda"
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return "mps"
-        except Exception as exc:
-            self.status_message.emit(f"GPU detection failed, using CPU. Reason: {exc}")
-        return "cpu"
-
-    def _init_embedder(self) -> None:
-        device = self._select_device()
-        try:
-            self._embedder = SentenceTransformer("all-MiniLM-L6-v2", device=device)
-            self.status_message.emit(f"Embedding device: {device}")
-        except Exception as exc:
-            self.status_message.emit(
-                f"GPU init failed ({device}); falling back to CPU. Reason: {exc}"
-            )
-            try:
-                self._embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
-                self.status_message.emit("Embedding device: cpu")
-            except Exception as inner_exc:
-                self.status_message.emit(f"Embedding init failed: {inner_exc}")
-
     def run(self) -> None:
-        self._init_embedder()
         if self.isInterruptionRequested() or self._cancelled:
             self.status_message.emit("Generation cancelled.")
             self.result_ready.emit("")

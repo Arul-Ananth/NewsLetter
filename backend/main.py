@@ -1,48 +1,26 @@
 import logging
 import sys
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Add project root to sys.path to allow imports from 'backend'
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from backend.common.config import AppMode, settings
+from backend.common.config import AppMode, AuthMode, settings
 from backend.common.logging import configure_logging
 
 
 def start_server() -> None:
     logger = logging.getLogger(__name__)
     logger.info("Starting Application as Server...")
-    if not settings.SECRET_KEY:
+    if settings.auth_mode() != AuthMode.TRUSTED_LAN and not settings.SECRET_KEY:
         raise RuntimeError("SECRET_KEY must be set in .env for server mode.")
 
     try:
         import uvicorn
-        from fastapi import FastAPI
-        from fastapi.middleware.cors import CORSMiddleware
-
-        from backend.common.database import create_db_and_tables
-        from backend.server.routers import auth, news
-
-        @asynccontextmanager
-        async def lifespan(_: FastAPI):
-            create_db_and_tables()
-            yield
-
-        app = FastAPI(title="AeroBrief Server", lifespan=lifespan)
-        app.include_router(auth.router, prefix="/auth")
-        app.include_router(news.router, prefix="/news")
-
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origins(),
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        from backend.server.app import create_app
 
         uvicorn.run(
-            app,
+            create_app(),
             host=settings.SERVER_HOST,
             port=settings.SERVER_PORT,
             reload=False,

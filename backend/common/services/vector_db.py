@@ -1,8 +1,8 @@
 from backend.common.services.memory.vector_db import (
     client,
-    embedder,
     ensure_collection,
     fetch_memories,
+    get_embedder,
     get_memory_context,
     get_user_context,
     save_feedback,
@@ -10,9 +10,9 @@ from backend.common.services.memory.vector_db import (
 
 __all__ = [
     "client",
-    "embedder",
     "ensure_collection",
     "fetch_memories",
+    "get_embedder",
     "get_memory_context",
     "get_user_context",
     "save_feedback",

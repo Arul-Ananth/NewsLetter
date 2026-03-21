@@ -7,13 +7,16 @@ import time
 from multiprocessing import Queue
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+BRIDGE_TOKEN_HEADER = "X-Bridge-Token"
+
 app = FastAPI()
 _ingest_queue: Queue | None = None
+_bridge_token: str | None = None
 
 
 class IngestPayload(BaseModel):
@@ -21,13 +24,19 @@ class IngestPayload(BaseModel):
     text: str | None = None
 
 
-def init_queue(queue: Queue) -> None:
-    global _ingest_queue
+def init_queue(queue: Queue, bridge_token: str) -> None:
+    global _ingest_queue, _bridge_token
     _ingest_queue = queue
+    _bridge_token = bridge_token
 
 
 @app.post("/ingest")
-def ingest(payload: IngestPayload):
+def ingest(
+    payload: IngestPayload,
+    bridge_token: str | None = Header(default=None, alias=BRIDGE_TOKEN_HEADER),
+):
+    if bridge_token != _bridge_token:
+        raise HTTPException(status_code=403, detail="invalid bridge token")
     if not payload.url and not payload.text:
         raise HTTPException(status_code=400, detail="url or text required")
     if _ingest_queue is None:
@@ -71,8 +80,9 @@ def run_api_server(
     status_queue: Queue | None,
     stop_event,
     preferred_port: int = 12345,
+    bridge_token: str = "",
 ) -> None:
-    init_queue(ingest_queue)
+    init_queue(ingest_queue, bridge_token)
     host = "127.0.0.1"
     errors: list[str] = []
 

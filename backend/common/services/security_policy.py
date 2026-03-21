@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+import ipaddress
+import json
+import logging
+from dataclasses import dataclass
+from urllib.parse import urlparse
+
+logger = logging.getLogger("aerobrief.security")
+
+ALLOWED_NETWORK_ACTIONS = {
+    "search.serper",
+    "search.discovery",
+    "search.fetch",
+}
+
+
+@dataclass(frozen=True)
+class PolicyDecision:
+    allowed: bool
+    reason: str
+    action: str
+    target: str
+
+
+def authorize_network_action(action: str, target: str) -> PolicyDecision:
+    if action not in ALLOWED_NETWORK_ACTIONS:
+        return PolicyDecision(False, "action_not_allowed", action, target)
+
+    parsed = urlparse(target)
+    if parsed.scheme not in {"http", "https"}:
+        return PolicyDecision(False, "scheme_not_allowed", action, target)
+
+    host = parsed.hostname
+    if not host:
+        return PolicyDecision(False, "missing_host", action, target)
+
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+
+    if ip is not None and (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved):
+        return PolicyDecision(False, "private_address_denied", action, target)
+
+    if host in {"localhost"}:
+        return PolicyDecision(False, "localhost_denied", action, target)
+
+    return PolicyDecision(True, "allowed", action, target)
+
+
+def audit_policy_decision(
+    *,
+    decision: PolicyDecision,
+    tool_name: str,
+    query: str,
+    session_id: str | None = None,
+    user_id: str | int | None = None,
+) -> None:
+    payload = {
+        "event": "security_policy_decision",
+        "tool": tool_name,
+        "action": decision.action,
+        "target": decision.target,
+        "allowed": decision.allowed,
+        "reason": decision.reason,
+        "query": query[:300],
+        "session_id": session_id or "",
+        "user_id": str(user_id) if user_id is not None else "",
+    }
+    logger.info(json.dumps(payload, sort_keys=True))

@@ -1,26 +1,21 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-import threading
 from datetime import datetime
 
 from PySide6.QtWidgets import QApplication, QTextEdit
 
 from backend.common.config import settings
-from backend.common.services.telemetry import (
-    DocumentIngestionWorker,
-    EventBus,
-    EventPriority,
-    SessionSummaryWorker,
-    TelemetryDispatcher,
-    TelemetryEvent,
-    UserProfileRollupWorker,
-)
-from backend.common.services.telemetry.consent import get_consented_folders
 from backend.common.services.memory.vector_db import client as qdrant_client
+from backend.common.services.telemetry import EventPriority, TelemetryEvent
+from backend.common.services.telemetry.consent import get_consented_folders
 from backend.desktop.collectors import ClipboardCollector, FileDropCollector, FolderWatchCollector, ReaderTelemetryCollector
-from backend.desktop.preferences import get_clipboard_collection_enabled, get_data_collection_enabled
+from backend.desktop.preferences import (
+    get_clipboard_collection_enabled,
+    get_clipboard_store_raw_text_enabled,
+    get_data_collection_enabled,
+)
+from backend.desktop.services.telemetry_runtime import TelemetryRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -31,41 +26,29 @@ class TelemetryManager:
         self.session_id = session_id
         self.output = output
 
-        self.event_bus: EventBus | None = None
-        self.ingestion_queue: asyncio.Queue | None = None
-        self.summary_queue: asyncio.Queue | None = None
-        self.dispatcher: TelemetryDispatcher | None = None
-        self.profile_worker: UserProfileRollupWorker | None = None
-        self.ingestion_worker: DocumentIngestionWorker | None = None
-        self.summary_worker: SessionSummaryWorker | None = None
-
-        self.clipboard_collector = ClipboardCollector(QApplication.clipboard(), session_id, self.emit)
+        self.runtime = TelemetryRuntime()
+        self.clipboard_collector = ClipboardCollector(QApplication.clipboard(), session_id, user_id, self.emit)
         self.file_drop_collector = FileDropCollector(session_id, user_id, self.emit)
         self.folder_watch_collector = FolderWatchCollector(session_id, user_id, self.emit)
         self.reader_telemetry = ReaderTelemetryCollector(output, session_id, self.emit)
-
         self._data_collection_enabled = settings.DATA_COLLECTION_ENABLED
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._runtime_thread: threading.Thread | None = None
-        self._runtime_ready = threading.Event()
-        self._tasks: list[asyncio.Task] = []
+        self._clipboard_collection_enabled = False
 
     def start(self) -> None:
-        self._data_collection_enabled = get_data_collection_enabled()
+        self._sync_runtime_preferences()
         if not self._data_collection_enabled:
-            logger.info("Desktop telemetry collection disabled by user preference.")
+            logger.info('Desktop telemetry collection disabled by user preference.')
             return
 
         try:
-            self._start_runtime()
+            self.runtime.start()
         except Exception as exc:
-            logger.exception("Failed to start telemetry runtime: %s", exc)
+            logger.exception('Failed to start telemetry runtime: %s', exc)
             return
 
-        clipboard_collection_enabled = get_clipboard_collection_enabled()
         self.reader_telemetry.start()
-        if clipboard_collection_enabled:
-            self.clipboard_collector.start()
+        if self._clipboard_collection_enabled:
+            self.clipboard_collector.start(enabled=True)
 
         if settings.FOLDER_WATCH_ENABLED:
             folders = get_consented_folders()
@@ -74,18 +57,10 @@ class TelemetryManager:
         self.emit_session_start()
 
     def shutdown(self) -> None:
+        self.clipboard_collector.stop()
         self.folder_watch_collector.stop()
         if self._data_collection_enabled:
-            if self._loop and self._runtime_ready.is_set():
-                future = asyncio.run_coroutine_threadsafe(self._drain_and_stop(), self._loop)
-                try:
-                    future.result(timeout=10)
-                except Exception as exc:
-                    logger.warning("Telemetry drain timed out or failed: %s", exc)
-                self._loop.call_soon_threadsafe(self._loop.stop)
-
-            if self._runtime_thread:
-                self._runtime_thread.join(timeout=3)
+            self.runtime.shutdown()
 
         try:
             qdrant_client.close()
@@ -95,45 +70,42 @@ class TelemetryManager:
     def emit(self, event: TelemetryEvent) -> None:
         if not self._data_collection_enabled:
             return
-        if not self._loop or not self._runtime_ready.is_set() or self.event_bus is None:
-            logger.debug("Dropping telemetry event before runtime is ready: %s", event.event_type)
-            return
-        self._loop.call_soon_threadsafe(self.event_bus.enqueue, event)
+        self.runtime.enqueue(event)
 
     def emit_session_start(self) -> None:
-        payload = {"ts": datetime.utcnow().isoformat(), "user_id": self.user_id}
+        payload = {'ts': datetime.utcnow().isoformat(), 'user_id': self.user_id}
         event = TelemetryEvent(
-            event_type="session_start",
+            event_type='session_start',
             session_id=self.session_id,
             payload=payload,
-            source="session",
+            source='session',
             priority=EventPriority.CRITICAL,
         )
         self.emit(event)
 
     def emit_session_end(self) -> None:
-        payload = {"ts": datetime.utcnow().isoformat(), "user_id": self.user_id}
+        payload = {'ts': datetime.utcnow().isoformat(), 'user_id': self.user_id}
         event = TelemetryEvent(
-            event_type="session_end",
+            event_type='session_end',
             session_id=self.session_id,
             payload=payload,
-            source="session",
+            source='session',
             priority=EventPriority.CRITICAL,
         )
         self.emit(event)
 
     def emit_generation(self, topic: str, context: str) -> None:
         payload = {
-            "topic": topic,
-            "context": context,
-            "user_id": self.user_id,
-            "ts": datetime.utcnow().isoformat(),
+            'topic': topic,
+            'context': context,
+            'user_id': self.user_id,
+            'ts': datetime.utcnow().isoformat(),
         }
         event = TelemetryEvent(
-            event_type="generate_newsletter",
+            event_type='generate_newsletter',
             session_id=self.session_id,
             payload=payload,
-            source="ui",
+            source='ui',
             priority=EventPriority.CRITICAL,
         )
         self.emit(event)
@@ -153,74 +125,33 @@ class TelemetryManager:
             return
         self.file_drop_collector.handle_paths(paths)
 
-    def _start_runtime(self) -> None:
-        if self._runtime_thread and self._runtime_thread.is_alive():
+    def reload_preferences(self) -> None:
+        previous_data_enabled = self._data_collection_enabled
+        previous_clipboard_enabled = self._clipboard_collection_enabled
+
+        self._sync_runtime_preferences()
+
+        if not previous_data_enabled and self._data_collection_enabled:
+            self.start()
             return
 
-        self._runtime_ready.clear()
-        self._runtime_thread = threading.Thread(target=self._run_runtime_loop, name="TelemetryRuntime", daemon=True)
-        self._runtime_thread.start()
-        if not self._runtime_ready.wait(timeout=5):
-            raise RuntimeError("Telemetry runtime failed to start in time.")
-
-    def _run_runtime_loop(self) -> None:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        self._loop = loop
-
-        self.event_bus = EventBus(settings.EVENT_QUEUE_MAX)
-        self.ingestion_queue = asyncio.Queue(maxsize=200)
-        self.summary_queue = asyncio.Queue(maxsize=50)
-
-        self.dispatcher = TelemetryDispatcher(self.event_bus, self.ingestion_queue, self.summary_queue)
-        self.profile_worker = UserProfileRollupWorker()
-        self.ingestion_worker = DocumentIngestionWorker(self.ingestion_queue)
-        self.summary_worker = SessionSummaryWorker(self.summary_queue, self.profile_worker)
-
-        self._tasks = [
-            loop.create_task(self.dispatcher.run()),
-            loop.create_task(self.ingestion_worker.run()),
-            loop.create_task(self.summary_worker.run()),
-        ]
-        self._runtime_ready.set()
-
-        try:
-            loop.run_forever()
-        finally:
-            pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
-            for task in pending:
-                task.cancel()
-            if pending:
-                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            loop.close()
-
-    async def _drain_and_stop(self) -> None:
-        if not self.event_bus or not self.ingestion_queue or not self.summary_queue:
+        if previous_data_enabled and not self._data_collection_enabled:
+            self.clipboard_collector.stop()
+            self.folder_watch_collector.stop()
             return
 
-        try:
-            await asyncio.wait_for(self.event_bus.queue.join(), timeout=3)
-        except asyncio.TimeoutError:
-            logger.warning("Timed out waiting for telemetry event queue to drain.")
+        if self._clipboard_collection_enabled and not previous_clipboard_enabled:
+            self.clipboard_collector.start(enabled=True)
+            logger.info("Clipboard collection enabled from updated desktop preferences.")
+        elif previous_clipboard_enabled and not self._clipboard_collection_enabled:
+            self.clipboard_collector.stop()
+            logger.info("Clipboard collection disabled from updated desktop preferences.")
 
-        try:
-            await asyncio.wait_for(self.ingestion_queue.join(), timeout=5)
-        except asyncio.TimeoutError:
-            logger.warning("Timed out waiting for ingestion queue to drain.")
-
-        try:
-            await asyncio.wait_for(self.summary_queue.join(), timeout=5)
-        except asyncio.TimeoutError:
-            logger.warning("Timed out waiting for summary queue to drain.")
-
-        if self.dispatcher:
-            self.dispatcher.stop()
-        if self.ingestion_worker:
-            self.ingestion_worker.stop()
-        if self.summary_worker:
-            self.summary_worker.stop()
-
-        for task in self._tasks:
-            task.cancel()
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+    def _sync_runtime_preferences(self) -> None:
+        self._data_collection_enabled = get_data_collection_enabled()
+        self._clipboard_collection_enabled = self._data_collection_enabled and get_clipboard_collection_enabled()
+        settings.DATA_COLLECTION_ENABLED = self._data_collection_enabled
+        settings.CLIPBOARD_COLLECTION_ENABLED = self._clipboard_collection_enabled
+        settings.CLIPBOARD_STORE_RAW_TEXT = (
+            self._clipboard_collection_enabled and get_clipboard_store_raw_text_enabled()
+        )

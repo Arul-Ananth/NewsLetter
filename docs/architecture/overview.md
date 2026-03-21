@@ -12,7 +12,7 @@
   - `database.py` SQLModel engine/session/migrations
   - `models/` API and DB models
   - `services/`
-    - `auth/` authentication utilities (JWT/password hashing)
+    - `auth/` authentication utilities (password hashing and trusted-LAN helpers)
     - `llm/` provider factory, tool policy, crew builders, newsletter orchestration
     - `memory/` memory sanitizer + vector DB helpers
     - `search/` web search tools and fallbacks

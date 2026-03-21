@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import {
     Typography, Container, Paper, TextField, Button,
@@ -14,31 +13,22 @@ import {
 } from '@mui/icons-material';
 
 import { api } from '../services/api';
-import type { NewsletterResponse, Memory } from '../services/api';
+import type { MemoryRecord, NewsletterResponse } from '../services/api';
 import CustomAppBar from '../components/CustomAppBar';
 
 import { useSettings } from '../context/SettingsContext';
 
 const Dashboard = () => {
-    const navigate = useNavigate();
-    const { isLocalMode, apiKey, serperKey } = useSettings();
+    const { apiKey, serperKey } = useSettings();
     const [topic, setTopic] = useState('');
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<NewsletterResponse | null>(null);
     const [tabIndex, setTabIndex] = useState(0);
-    const [memories, setMemories] = useState<Memory[]>([]);
+    const [memories, setMemories] = useState<MemoryRecord[]>([]);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMsg, setSnackbarMsg] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
-    const [credits, setCredits] = useState<number | null>(null);
-
-    // 1. Auth Guard (Smart Mode)
-    useEffect(() => {
-        // If NOT in Local Mode AND NOT Authenticated -> Redirect
-        if (!isLocalMode && !api.isAuthenticated()) {
-            navigate('/signin');
-        }
-    }, [navigate, isLocalMode]);
+    const [credits, setCredits] = useState<number | string | null>(null);
 
     const handleGenerate = async () => {
         if (!topic) return;
@@ -55,10 +45,11 @@ const Dashboard = () => {
             if (data.bill) {
                 setCredits(data.bill.remaining);
             }
-        } catch (error: any) {
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
             console.error(error);
-            if (error.message.includes("Credits")) {
-                setErrorMsg(error.message);
+            if (message.includes("Credits")) {
+                setErrorMsg(message);
             } else {
                 setErrorMsg("Connection failed. Please check backend terminal for errors.");
             }
@@ -73,8 +64,8 @@ const Dashboard = () => {
             await api.sendFeedback(result.topic, text, sentiment);
             setSnackbarMsg(`Feedback Sent: ${sentiment.toUpperCase()}`);
             setSnackbarOpen(true);
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
             setSnackbarMsg("Failed to send feedback");
             setSnackbarOpen(true);
         }
@@ -84,8 +75,8 @@ const Dashboard = () => {
         try {
             const mems = await api.getProfile();
             setMemories(mems);
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
         }
     };
 

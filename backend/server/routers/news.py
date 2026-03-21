@@ -3,12 +3,19 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
+from backend.common.config import settings
 from backend.common.database import get_session
-from backend.common.models.schemas import FeedbackRequest, NewsRequest, NewsResponse
-from backend.common.models.sql import User
+from backend.common.models.schemas import (
+    FeedbackRequest,
+    FeedbackResponse,
+    NewsRequest,
+    NewsResponse,
+    ProfileResponse,
+)
+from backend.common.services.auth.resolver import get_current_principal
+from backend.common.services.auth.types import AuthPrincipal
 from backend.common.services.llm.newsletter_service import newsletter_service
 from backend.common.services.memory import vector_db
-from backend.server.dependencies import get_current_user
 from backend.server.services import billing
 
 logger = logging.getLogger(__name__)
@@ -19,12 +26,12 @@ router = APIRouter(tags=["News"])
 @router.post("/generate", response_model=NewsResponse)
 async def generate_news(
     request: NewsRequest,
-    current_user: User = Depends(get_current_user),
+    principal: AuthPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_session),
 ):
-    billing.check_funds(session, current_user.id)
+    billing.check_funds(session, principal.user_id)
 
-    context = vector_db.get_user_context(current_user.id, request.topic)
+    context = vector_db.get_user_context(principal.user_id, request.topic)
 
     try:
         api_keys = {
@@ -33,7 +40,7 @@ async def generate_news(
         }
         result_response = await newsletter_service.generate_newsletter(
             topic=request.topic,
-            user_id=current_user.id,
+            user_id=principal.user_id,
             context=str(context),
             api_keys=api_keys,
         )
@@ -42,38 +49,47 @@ async def generate_news(
         output_tok = 100
     except Exception as exc:
         logger.exception("Newsletter generation failed: %s", exc)
-        raise HTTPException(status_code=500, detail="Newsletter generation failed.")
+        raise HTTPException(status_code=500, detail="Newsletter generation failed.") from exc
 
-    receipt = billing.process_transaction(session, current_user.id, request.topic, input_tok, output_tok)
+    receipt = billing.process_transaction(session, principal.user_id, request.topic, input_tok, output_tok)
 
-    return {
-        "topic": request.topic,
-        "content": content,
-        "bill": receipt,
-    }
+    return NewsResponse(
+        topic=request.topic,
+        content=content,
+        bill=receipt,
+    )
 
 
-@router.post("/feedback")
+@router.post("/feedback", response_model=FeedbackResponse)
 def submit_feedback(
     feedback: FeedbackRequest,
-    current_user: User = Depends(get_current_user),
+    principal: AuthPrincipal = Depends(get_current_principal),
 ):
     vector_db.save_feedback(
-        current_user.id,
+        principal.user_id,
         feedback.original_topic,
         feedback.feedback_text,
         feedback.sentiment,
     )
-    return {"status": "Feedback recorded"}
+    return FeedbackResponse(status="Feedback recorded")
 
 
-@router.get("/profile/{user_id}")
+@router.get("/profile", response_model=ProfileResponse)
+def get_current_profile(
+    principal: AuthPrincipal = Depends(get_current_principal),
+):
+    memories = vector_db.fetch_memories(principal.user_id)
+    return ProfileResponse(memories=memories)
+
+
+@router.get("/profile/{user_id}", response_model=ProfileResponse)
 def get_profile(
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    principal: AuthPrincipal = Depends(get_current_principal),
 ):
-    if user_id != current_user.id:
+    if not settings.is_trusted_lan_auth() and user_id != principal.user_id:
         raise HTTPException(status_code=403, detail="Not authorized to view this profile")
 
-    memories = vector_db.fetch_memories(user_id)
-    return {"memories": memories}
+    effective_user_id = principal.user_id if settings.is_trusted_lan_auth() else user_id
+    memories = vector_db.fetch_memories(effective_user_id)
+    return ProfileResponse(memories=memories)

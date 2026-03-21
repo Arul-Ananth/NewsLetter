@@ -1,15 +1,51 @@
+import json
 import logging
 import os
+import re
+import threading
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from sentence_transformers import SentenceTransformer
+from sqlmodel import Session, select
 
 from backend.common.config import AppMode, settings
+from backend.common.database import engine
+from backend.common.models.sql import EventRaw
 
 logger = logging.getLogger(__name__)
+
+_ROOT_DIR = Path(__file__).resolve().parents[4]
+_embedder: SentenceTransformer | None = None
+_embedder_lock = threading.Lock()
+_CLIPBOARD_QUERY_PATTERNS = (
+    "clipboard",
+    "what did i just copy",
+    "what i just copy",
+    "copied to clipboard",
+    "clipboard history",
+)
+_CLIPBOARD_STOPWORDS = {
+    "tell",
+    "me",
+    "what",
+    "did",
+    "i",
+    "just",
+    "copy",
+    "copied",
+    "to",
+    "clipboard",
+    "history",
+    "from",
+    "my",
+    "know",
+    "about",
+    "the",
+}
 
 
 def _create_client() -> QdrantClient:
@@ -18,11 +54,19 @@ def _create_client() -> QdrantClient:
     qdrant_url = os.getenv("QDRANT_URL")
     if qdrant_url:
         return QdrantClient(url=qdrant_url)
-    return QdrantClient(path="./qdrant_db_local")
+    return QdrantClient(path=str(_ROOT_DIR / "qdrant_db_local"))
 
 
 client = _create_client()
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+def get_embedder() -> SentenceTransformer:
+    global _embedder
+    if _embedder is None:
+        with _embedder_lock:
+            if _embedder is None:
+                _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embedder
 
 
 def ensure_collection(name: str) -> None:
@@ -40,7 +84,7 @@ def ensure_collection(name: str) -> None:
 def _query_collection(collection: str, user_id: int, query: str, limit: int = 3) -> list[str]:
     try:
         ensure_collection(collection)
-        query_vector = embedder.encode(query).tolist()
+        query_vector = get_embedder().encode(query).tolist()
         results = client.query_points(
             collection_name=collection,
             query=query_vector,
@@ -72,7 +116,7 @@ def get_user_context(user_id: int, topic: str) -> str:
 def save_feedback(user_id: int, topic: str, feedback: str, sentiment: str) -> None:
     ensure_collection(settings.QDRANT_COLLECTION_USER_PROFILE)
     text = f"Topic: {topic}. User Feedback: {feedback}. Sentiment: {sentiment}"
-    vector = embedder.encode(text).tolist()
+    vector = get_embedder().encode(text).tolist()
     point_id = str(uuid.uuid4())
 
     client.upsert(
@@ -139,3 +183,79 @@ def get_memory_context(user_id: int, topic: str, session_id: str | None = None) 
         sections.append("User Profile:\n" + "\n".join(profile))
 
     return "\n\n".join(sections).strip()
+
+
+def is_clipboard_history_query(topic: str) -> bool:
+    lowered = topic.strip().lower()
+    return any(pattern in lowered for pattern in _CLIPBOARD_QUERY_PATTERNS)
+
+
+def get_recent_clipboard_context(topic: str, session_id: str | None = None, limit: int = 5) -> str:
+    if not is_clipboard_history_query(topic):
+        return ""
+
+    terms = _clipboard_query_terms(topic)
+    matches = _matching_clipboard_entries(terms=terms, session_id=session_id, limit=limit)
+    if not matches:
+        if terms:
+            return (
+                "Clipboard History Context:\n"
+                f"- No recent clipboard entries matched: {', '.join(terms)}"
+            )
+        latest = _matching_clipboard_entries(terms=[], session_id=session_id, limit=1)
+        if latest:
+            return "Clipboard History Context:\n" + "\n".join(f"- {item}" for item in latest)
+        return "Clipboard History Context:\n- No recent clipboard entries were captured."
+
+    return "Clipboard History Context:\n" + "\n".join(f"- {item}" for item in matches)
+
+
+def _clipboard_query_terms(topic: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9_+-]+", topic.lower())
+    filtered = [token for token in tokens if token not in _CLIPBOARD_STOPWORDS and len(token) > 2]
+    seen: list[str] = []
+    for token in filtered:
+        if token not in seen:
+            seen.append(token)
+    return seen
+
+
+def _matching_clipboard_entries(terms: list[str], session_id: str | None, limit: int) -> list[str]:
+    entries: list[str] = []
+    seen_text: set[str] = set()
+
+    def add_matches(records: list[EventRaw]) -> None:
+        for event in records:
+            payload = json.loads(event.payload_json)
+            text = (payload.get("text") or payload.get("url") or "").strip()
+            if not text:
+                continue
+            lowered = text.lower()
+            if terms and not any(term in lowered for term in terms):
+                continue
+            normalized = text[:1200]
+            if normalized in seen_text:
+                continue
+            seen_text.add(normalized)
+            entries.append(normalized)
+            if len(entries) >= limit:
+                break
+
+    with Session(engine) as session:
+        if session_id:
+            current_session = session.exec(
+                select(EventRaw)
+                .where(EventRaw.event_type == "clipboard", EventRaw.session_id == session_id)
+                .order_by(EventRaw.ts.desc())
+            ).all()
+            add_matches(current_session)
+
+        if len(entries) < limit:
+            recent = session.exec(
+                select(EventRaw)
+                .where(EventRaw.event_type == "clipboard")
+                .order_by(EventRaw.ts.desc())
+            ).all()
+            add_matches(recent)
+
+    return entries[:limit]

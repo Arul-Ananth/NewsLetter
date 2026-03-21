@@ -1,35 +1,76 @@
-﻿from pydantic import BaseModel, EmailStr
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
-class UserSignup(BaseModel):
-    full_name: str
+class StrictBaseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class UserSignup(StrictBaseModel):
+    full_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
-    password: str
+    password: str = Field(min_length=6, max_length=255)
 
 
-class UserLogin(BaseModel):
+class UserLogin(StrictBaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=255)
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+class AuthStatus(StrictBaseModel):
+    message: str
+    user_id: int | None = None
+    trusted_lan_mode: bool = False
+    auth_mode: str
+    authenticated: bool = False
+    provider: str | None = None
+    requires_login: bool = True
+    session_token: str | None = None
 
 
-class NewsRequest(BaseModel):
-    topic: str
+class SignupResponse(StrictBaseModel):
+    message: str
+    user_id: int
+    auth_provider: str
+
+
+class BillingReceipt(StrictBaseModel):
+    deducted: int
+    remaining: int | str
+
+
+class NewsRequest(StrictBaseModel):
+    topic: str = Field(min_length=1, max_length=255)
     serper_api_key: str | None = None
     openai_api_key: str | None = None
 
 
-class NewsResponse(BaseModel):
+class NewsResponse(StrictBaseModel):
     topic: str
     content: str
-    bill: dict
+    bill: BillingReceipt
 
 
-class FeedbackRequest(BaseModel):
-    original_topic: str
-    feedback_text: str
-    sentiment: str
+class FeedbackRequest(StrictBaseModel):
+    original_topic: str = Field(min_length=1, max_length=255)
+    feedback_text: str = Field(min_length=1, max_length=2000)
+    sentiment: str = Field(min_length=1, max_length=50)
+
+
+class FeedbackResponse(StrictBaseModel):
+    status: str
+
+
+class MessageResponse(StrictBaseModel):
+    message: str
+
+
+class MemoryRecord(StrictBaseModel):
+    id: str
+    document: str
+    metadata: dict[str, Any]
+
+
+class ProfileResponse(StrictBaseModel):
+    memories: list[MemoryRecord]

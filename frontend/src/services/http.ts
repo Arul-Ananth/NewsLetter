@@ -1,0 +1,48 @@
+import { getSessionToken } from '../features/auth/storage';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
+export class ApiError extends Error {
+    status: number;
+
+    constructor(status: number, message: string) {
+        super(message);
+        this.status = status;
+    }
+}
+
+interface ApiRequestOptions {
+    method?: string;
+    body?: unknown;
+    headers?: HeadersInit;
+    includeAuth?: boolean;
+}
+
+export async function apiRequest<T>(
+    path: string,
+    { method = 'GET', body, headers, includeAuth = true }: ApiRequestOptions = {},
+): Promise<T> {
+    const requestHeaders = new Headers(headers || {});
+    const token = includeAuth ? getSessionToken() : null;
+
+    if (body !== undefined && !requestHeaders.has('Content-Type')) {
+        requestHeaders.set('Content-Type', 'application/json');
+    }
+    if (token && !requestHeaders.has('Authorization')) {
+        requestHeaders.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        method,
+        headers: requestHeaders,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const detail = typeof data?.detail === 'string' ? data.detail : 'Request failed';
+        throw new ApiError(response.status, detail);
+    }
+
+    return data as T;
+}

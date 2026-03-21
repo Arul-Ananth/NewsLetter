@@ -18,10 +18,10 @@ Scope: Current repository implementation review + OpenClaw docs mapping + Python
 
 ### 1.2 Auth and API
 - Auth routes (`backend/server/routers/auth.py`):
-  - `/auth/signup`, `/auth/login` with JWT issuance.
+  - `/auth/signup`, `/auth/login` retained for future auth work.
 - Protected routes (`backend/server/routers/news.py`):
-  - `/news/generate`, `/news/feedback`, `/news/profile/{user_id}`.
-  - Dependency enforces current user from JWT (`backend/server/dependencies.py`).
+  - `/news/generate`, `/news/feedback`, `/news/profile`, `/news/profile/{user_id}`.
+  - In trusted LAN mode, dependency resolves a fixed trusted server user instead of JWT auth.
 
 ### 1.3 LLM and agent flow
 - Newsletter generation (`backend/common/services/llm/newsletter_service.py`):
@@ -58,7 +58,7 @@ Scope: Current repository implementation review + OpenClaw docs mapping + Python
 ### 1.7 Frontend
 - React + Vite + MUI with API wrapper (`frontend/src/services/api.ts`).
 - API base URL is env-driven (`VITE_API_BASE_URL`) with localhost fallback.
-- JWT stored in browser `localStorage`.
+- Active LAN flow goes directly to the dashboard without browser auth.
 
 ## 2) OpenClaw-Parity Recommendations (Privacy/Security-First)
 

@@ -1,10 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
 interface SettingsContextType {
-    isDesktop: boolean;
-    useCloud: boolean;
-    setUseCloud: (useCloud: boolean) => void;
-    isLocalMode: boolean; // Derived: isDesktop && !useCloud
     apiKey: string;
     setApiKey: (key: string) => void;
     serperKey: string;
@@ -13,80 +9,38 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export const useSettings = () => {
+export function useSettings() {
     const context = useContext(SettingsContext);
     if (!context) {
         throw new Error('useSettings must be used within a SettingsProvider');
     }
     return context;
-};
-
-interface SettingsProviderProps {
-    children: ReactNode;
 }
 
-export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) => {
-    // 1. Detect Desktop Environment (Tauri)
-    // @ts-ignore
-    const isDesktop = typeof window !== 'undefined' && window.__TAURI__ !== undefined;
+function usePersistedSetting(storageKey: string, initialValue = '') {
+    const [value, setValue] = useState(() => localStorage.getItem(storageKey) || initialValue);
 
-    console.log("[Settings] Environment Detection:", { isDesktop, userAgent: window.navigator.userAgent });
-
-    // 2. Preferences
-    const [useCloud, setUseCloudState] = useState(() => {
-        return localStorage.getItem('useCloud') === 'true';
-    });
-
-    const [apiKey, setApiKeyState] = useState(() => {
-        return localStorage.getItem('userArgs_apiKey') || '';
-    });
-
-    // NEW: Serper Key
-    const [serperKey, setSerperKeyState] = useState(() => {
-        return localStorage.getItem('userArgs_serperKey') || '';
-    });
-
-    const setUseCloud = (val: boolean) => {
-        setUseCloudState(val);
-        localStorage.setItem('useCloud', String(val));
+    const updateValue = (nextValue: string) => {
+        setValue(nextValue);
+        localStorage.setItem(storageKey, nextValue);
     };
 
-    const setApiKey = (val: string) => {
-        setApiKeyState(val);
-        localStorage.setItem('userArgs_apiKey', val);
-    };
+    return [value, updateValue] as const;
+}
 
-    const setSerperKey = (val: string) => {
-        setSerperKeyState(val);
-        localStorage.setItem('userArgs_serperKey', val);
-    };
+export function SettingsProvider({ children }: { children: ReactNode }) {
+    const [apiKey, setApiKey] = usePersistedSetting('userArgs_apiKey');
+    const [serperKey, setSerperKey] = usePersistedSetting('userArgs_serperKey');
 
-    // 3. Derived Mode
-    // Local Mode = We are on Desktop AND user hasn't opted into Cloud
-    const isLocalMode = isDesktop && !useCloud;
-
-    console.log("[Settings] Mode:", { isLocalMode, isDesktop, useCloud });
-
-    // Sync mode to localStorage for api.ts (static access) to read if needed
-    useEffect(() => {
-        localStorage.setItem('isLocalMode', String(isLocalMode));
-    }, [isLocalMode]);
-
-    const value = {
-        isDesktop,
-        useCloud,
-        setUseCloud,
-        isLocalMode,
-        apiKey,
-        setApiKey,
-        serperKey,
-
-        setSerperKey, // Uses the wrapper function defined above
-    };
-
-    return (
-        <SettingsContext.Provider value={value}>
-            {children}
-        </SettingsContext.Provider>
+    const value = useMemo(
+        () => ({
+            apiKey,
+            setApiKey,
+            serperKey,
+            setSerperKey,
+        }),
+        [apiKey, serperKey],
     );
-};
+
+    return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+}

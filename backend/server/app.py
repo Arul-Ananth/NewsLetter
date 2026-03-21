@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
+
+from backend.common.config import settings
+from backend.common.database import create_db_and_tables, engine
+from backend.common.services.auth.store import ensure_trusted_lan_user
+from backend.server.routers import auth, news
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    create_db_and_tables()
+    if settings.is_trusted_lan_auth():
+        with Session(engine) as session:
+            ensure_trusted_lan_user(session)
+    yield
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="AeroBrief Server", lifespan=lifespan)
+    app.include_router(auth.router, prefix="/auth")
+    app.include_router(news.router, prefix="/news")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins(),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    return app

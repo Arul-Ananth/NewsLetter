@@ -15,16 +15,19 @@ from PySide6.QtWidgets import (
 from backend.common.services.telemetry.consent import add_folder_consent
 from backend.desktop.preferences import (
     get_clipboard_collection_enabled,
+    get_clipboard_store_raw_text_enabled,
     get_data_collection_enabled,
     set_clipboard_collection_enabled,
+    set_clipboard_store_raw_text_enabled,
     set_data_collection_enabled,
 )
 from backend.desktop.security import get_secret, set_secret
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, on_saved=None):
         super().__init__(parent)
+        self._on_saved = on_saved
         self.setWindowTitle("Settings")
         self.resize(400, 240)
 
@@ -54,7 +57,12 @@ class SettingsDialog(QDialog):
 
         self.clipboard_collection_checkbox = QCheckBox("Enable clipboard collection (opt-in)")
         self.clipboard_collection_checkbox.setChecked(get_clipboard_collection_enabled())
+        self.clipboard_collection_checkbox.toggled.connect(self._on_clipboard_collection_toggled)
         layout.addWidget(self.clipboard_collection_checkbox)
+
+        self.clipboard_raw_checkbox = QCheckBox("Store raw clipboard text (higher sensitivity)")
+        self.clipboard_raw_checkbox.setChecked(get_clipboard_store_raw_text_enabled())
+        layout.addWidget(self.clipboard_raw_checkbox)
         self._on_data_collection_toggled(self.data_collection_checkbox.isChecked())
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -73,6 +81,12 @@ class SettingsDialog(QDialog):
 
         set_data_collection_enabled(self.data_collection_checkbox.isChecked())
         set_clipboard_collection_enabled(self.clipboard_collection_checkbox.isChecked())
+        set_clipboard_store_raw_text_enabled(
+            self.clipboard_collection_checkbox.isChecked() and self.clipboard_raw_checkbox.isChecked()
+        )
+
+        if self._on_saved is not None:
+            self._on_saved()
 
         QMessageBox.information(self, "Settings", "Settings saved.")
         self.accept()
@@ -88,3 +102,10 @@ class SettingsDialog(QDialog):
         self.clipboard_collection_checkbox.setEnabled(enabled)
         if not enabled:
             self.clipboard_collection_checkbox.setChecked(False)
+            self.clipboard_raw_checkbox.setChecked(False)
+        self._on_clipboard_collection_toggled(enabled and self.clipboard_collection_checkbox.isChecked())
+
+    def _on_clipboard_collection_toggled(self, enabled: bool) -> None:
+        self.clipboard_raw_checkbox.setEnabled(enabled and self.data_collection_checkbox.isChecked())
+        if not enabled:
+            self.clipboard_raw_checkbox.setChecked(False)
