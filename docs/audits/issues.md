@@ -1,4 +1,4 @@
-# AeroBrief Codebase Issue Audit
+# Lumeward Codebase Issue Audit
 
 Date: 2026-03-15
 Scope: Static review of backend, desktop, frontend, and verification scripts in this repo, plus build/compile checks.

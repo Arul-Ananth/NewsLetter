@@ -22,7 +22,7 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="AeroBrief Server", lifespan=lifespan)
+    app = FastAPI(title="Lumeward Server", lifespan=lifespan)
     app.include_router(auth.router, prefix="/auth")
     app.include_router(news.router, prefix="/news")
     app.add_middleware(

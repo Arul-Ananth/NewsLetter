@@ -1,4 +1,4 @@
-# AeroBrief Dependency Audit, Best-Practice Review, and Readability Suggestions
+# Lumeward Dependency Audit, Best-Practice Review, and Readability Suggestions
 
 Date: 2026-03-21
 

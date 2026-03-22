@@ -2,12 +2,11 @@ legacy_archive/
 qdrant_db_local/
 miscellanious/
 system_prompt.md
-dev_ops/
 PLANS/
-backend/aerobrief_server.db
+backend/lumeward_server.db
 
 # ===========================
-# React / Node (newsletter-ui)
+# React / Node (lumeward-ui)
 # ===========================
 node_modules/
 frontend/node_modules/

@@ -2,7 +2,7 @@
 PySide6
 qasync
 keyring
-duckduckgo-search
+ddgs
 trafilatura
 lxml
 watchdog

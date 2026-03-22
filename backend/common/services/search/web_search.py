@@ -1,16 +1,16 @@
 from typing import Type, Union
+import warnings
 
 import requests
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from backend.common.config import AppMode, settings
+from backend.common.services.network import build_request_headers, build_retry_session
 from backend.common.services.security_policy import audit_policy_decision, authorize_network_action
 
 SERPER_URL = "https://google.serper.dev/search"
-DEFAULT_HEADERS = {"User-Agent": "AeroBrief/1.0"}
+FALLBACK_DISCOVERY_URL = "https://duckduckgo.com"
 
 
 class SearchToolInput(BaseModel):
@@ -21,22 +21,6 @@ def _normalize_query(query: Union[str, dict]) -> str:
     if isinstance(query, dict):
         return str(query.get("description", str(query)))
     return str(query)
-
-
-def _build_http_session() -> requests.Session:
-    retry = Retry(
-        total=2,
-        read=2,
-        connect=2,
-        backoff_factor=0.5,
-        status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=("GET", "POST"),
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session = requests.Session()
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    return session
 
 
 class WebSearchTool(BaseTool):
@@ -50,7 +34,7 @@ class WebSearchTool(BaseTool):
         if allow_fallback is None:
             allow_fallback = settings.APP_MODE == AppMode.DESKTOP
         self._allow_fallback = allow_fallback
-        self._http = _build_http_session()
+        self._http = build_retry_session()
 
     def _run(self, query: Union[str, dict]) -> str:
         normalized = _normalize_query(query)
@@ -69,8 +53,8 @@ class WebSearchTool(BaseTool):
         headers = {
             "X-API-KEY": self._serper_api_key,
             "Content-Type": "application/json",
-            **DEFAULT_HEADERS,
         }
+        headers = build_request_headers(headers)
         payload = {"q": query}
 
         try:
@@ -88,19 +72,30 @@ class WebSearchTool(BaseTool):
 
     def _duckduckgo_scrape(self, query: str) -> str:
         try:
-            from duckduckgo_search import DDGS
             import trafilatura
+            DDGS, search_kwargs = _load_fallback_search_client()
         except Exception as exc:
             return f"Fallback search unavailable: {exc}"
 
-        discovery_decision = authorize_network_action("search.discovery", "https://duckduckgo.com")
+        discovery_decision = authorize_network_action("search.discovery", FALLBACK_DISCOVERY_URL)
         audit_policy_decision(decision=discovery_decision, tool_name=self.name, query=query)
         if not discovery_decision.allowed:
             return f"Search blocked by security policy: {discovery_decision.reason}"
 
         try:
-            with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=5))
+            ddgs = DDGS(timeout=10)
+            try:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=r"This package \(`duckduckgo_search`\) has been renamed to `ddgs`!.*",
+                        category=RuntimeWarning,
+                    )
+                    results = list(ddgs.text(query, max_results=5, **search_kwargs))
+            finally:
+                close = getattr(ddgs, "close", None)
+                if callable(close):
+                    close()
         except Exception as exc:
             return f"Error executing fallback search: {exc}"
 
@@ -125,7 +120,7 @@ class WebSearchTool(BaseTool):
             return ""
 
         try:
-            response = self._http.get(url, timeout=(5, 15), headers=DEFAULT_HEADERS)
+            response = self._http.get(url, timeout=(5, 15), headers=build_request_headers())
             response.raise_for_status()
         except Exception:
             return ""
@@ -137,3 +132,17 @@ class WebSearchTool(BaseTool):
 class WebSearchGoogleTool(WebSearchTool):
     name: str = "Web Search (Google)"
     description: str = "Search the internet for facts."
+
+
+def _load_fallback_search_client():
+    try:
+        from ddgs import DDGS
+
+        return DDGS, {"backend": "duckduckgo"}
+    except Exception as ddgs_exc:
+        try:
+            from duckduckgo_search import DDGS
+
+            return DDGS, {"backend": "html"}
+        except Exception as legacy_exc:
+            raise RuntimeError(f"ddgs import failed: {ddgs_exc}; duckduckgo_search import failed: {legacy_exc}")

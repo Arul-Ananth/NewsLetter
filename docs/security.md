@@ -2,7 +2,7 @@
 
 ## Current Modes
 
-AeroBrief now supports two web auth modes.
+Lumeward now supports two web auth modes.
 
 - `AUTH_MODE=trusted_lan`
   - one synthetic LAN identity is resolved on the server
@@ -51,7 +51,7 @@ These are still open future work, not removed from the architecture:
 
 ## Future Direction
 
-When AeroBrief moves beyond the current deployment profile, the next hardening steps should be:
+When Lumeward moves beyond the current deployment profile, the next hardening steps should be:
 
 1. provider-specific auth adapters for the chosen web auth system
 2. per-user memory isolation across all web modes

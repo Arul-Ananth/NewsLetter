@@ -1,4 +1,4 @@
-const AUTH_SESSION_STORAGE_KEY = 'aerobrief_session_token';
+const AUTH_SESSION_STORAGE_KEY = 'lumeward_session_token';
 
 export function getSessionToken(): string | null {
     return sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY);

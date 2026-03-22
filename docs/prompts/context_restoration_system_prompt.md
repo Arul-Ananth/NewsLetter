@@ -1,10 +1,10 @@
-# AeroBrief Context Restoration System Prompt
+# Lumeward Context Restoration System Prompt
 
 ## 1. Purpose
 
-This prompt restores working context for an AI developer assistant operating inside the AeroBrief repository.
+This prompt restores working context for an AI developer assistant operating inside the Lumeward repository.
 
-The assistant's job is to help developers work on AeroBrief accurately and pragmatically by:
+The assistant's job is to help developers work on Lumeward accurately and pragmatically by:
 - staying aligned to the current codebase,
 - using real file paths and real implementation details,
 - avoiding invented APIs, flows, or dependencies,
@@ -12,7 +12,7 @@ The assistant's job is to help developers work on AeroBrief accurately and pragm
 
 ## 2. Product Summary
 
-AeroBrief is a hybrid AI newsletter application with two runtime modes built on a shared backend core.
+Lumeward is a hybrid AI newsletter application with two runtime modes built on a shared backend core.
 
 - `SERVER` mode:
   - FastAPI backend for web clients.
@@ -104,10 +104,10 @@ Entry point:
 
 Behavior:
 
-- Reads `APP_MODE` from `.env`.
-- Starts FastAPI when `APP_MODE=SERVER`.
-- Requires `SECRET_KEY` to be set.
-- Uses env-driven bind host/port and CORS.
+- Resolves runtime mode from CLI first, then env.
+- Starts FastAPI when the resolved mode is `SERVER`.
+- Requires `SECRET_KEY` to be set for non-trusted-LAN server mode.
+- Uses env/CLI-driven bind host/port and CORS.
 
 Routes:
 
@@ -133,7 +133,7 @@ Entry point:
 
 Behavior:
 
-- Forces `settings.APP_MODE = DESKTOP`.
+- Runs when the resolved runtime mode is `DESKTOP`.
 - Creates a fixed local desktop user if needed.
 - Starts the PySide6 app with qasync.
 - Starts a separate-process local bridge via `backend/desktop/services/api_server.py`.
@@ -260,7 +260,7 @@ API configuration:
 
 Packaging:
 
-- PyInstaller spec lives at `packaging/pyinstaller/AeroBrief.spec`
+- PyInstaller spec lives at `packaging/pyinstaller/Lumeward.spec`
 
 Scripts:
 
@@ -302,36 +302,35 @@ Storage/telemetry:
 Server mode:
 
 ```powershell
-cd C:\Dev\news-letter
-.\venv_win\Scripts\python.exe backend\main.py
+cd C:\Dev\lumeward
+.\venv_win\Scripts\python.exe backend\main.py --mode server
 ```
 
 Desktop mode:
 
 ```powershell
-cd C:\Dev\news-letter
-$env:APP_MODE="DESKTOP"
-.\venv_win\Scripts\python.exe backend\main.py
+cd C:\Dev\lumeward
+.\venv_win\Scripts\python.exe backend\main.py --mode desktop
 ```
 
 Frontend dev mode:
 
 ```powershell
-cd C:\Dev\news-letter\frontend
+cd C:\Dev\lumeward\frontend
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
 Note:
 
-- Current startup is env-driven.
-- Do not assume a working CLI `--mode` flag unless code confirms it.
+- CLI flags override env settings.
+- `APP_MODE`, `AUTH_MODE`, `SERVER_HOST`, and `SERVER_PORT` remain valid env inputs.
 
 ## 15. Current Known Caveats
 
 - Web mode currently runs in trusted LAN mode with no browser auth and shared memory/profile state.
 - Billing still uses placeholder token counts in `backend/server/routers/news.py`.
 - `Web Search (Google)` is currently a renamed subclass, not a distinct Google API implementation.
-- Search fallback still depends on `duckduckgo-search` + `trafilatura`.
+- Search fallback now prefers `ddgs` + `trafilatura`.
 - Heavy embedding initialization still exists in memory/vector paths.
 - Some old docs may reference pre-refactor service paths; prefer the domain-based paths under `backend/common/services/`.
 

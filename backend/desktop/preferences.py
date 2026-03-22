@@ -4,8 +4,8 @@ from PySide6.QtCore import QSettings
 
 from backend.common.config import settings
 
-_ORG_NAME = "AeroBrief"
-_APP_NAME = "AeroBrief"
+_ORG_NAME = "Lumeward"
+_APP_NAME = "Lumeward"
 
 _KEY_DATA_COLLECTION_ENABLED = "telemetry/data_collection_enabled"
 _KEY_CLIPBOARD_COLLECTION_ENABLED = "telemetry/clipboard_collection_enabled"

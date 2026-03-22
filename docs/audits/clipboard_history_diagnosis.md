@@ -22,10 +22,10 @@ The desktop clipboard-history behavior is currently broken for two separate reas
 
 Current code path:
 
-- Preferences are saved in [backend/desktop/preferences.py](C:/Dev/news-letter/backend/desktop/preferences.py)
-- Settings dialog writes them in [backend/desktop/ui/settings_dialog.py](C:/Dev/news-letter/backend/desktop/ui/settings_dialog.py)
-- Telemetry manager reads the preference in [backend/desktop/telemetry_manager.py](C:/Dev/news-letter/backend/desktop/telemetry_manager.py)
-- Clipboard collector incorrectly gates startup on static config in [backend/desktop/collectors/clipboard_collector.py](C:/Dev/news-letter/backend/desktop/collectors/clipboard_collector.py)
+- Preferences are saved in [backend/desktop/preferences.py](C:/Dev/lumeward/backend/desktop/preferences.py)
+- Settings dialog writes them in [backend/desktop/ui/settings_dialog.py](C:/Dev/lumeward/backend/desktop/ui/settings_dialog.py)
+- Telemetry manager reads the preference in [backend/desktop/telemetry_manager.py](C:/Dev/lumeward/backend/desktop/telemetry_manager.py)
+- Clipboard collector incorrectly gates startup on static config in [backend/desktop/collectors/clipboard_collector.py](C:/Dev/lumeward/backend/desktop/collectors/clipboard_collector.py)
 
 The actual mismatch observed in this environment was:
 
@@ -47,7 +47,7 @@ That means the UI opt-in was saved, but the collector still sees clipboard colle
 
 ## Secondary Design Issue
 
-Even after the primary bug is fixed, the current retrieval path is still not suitable for ìwhat did I just copy?î style queries.
+Even after the primary bug is fixed, the current retrieval path is still not suitable for ‚Äúwhat did I just copy?‚Äù style queries.
 
 ### Current flow
 
@@ -68,9 +68,9 @@ clipboard change
 
 Relevant files:
 
-- [backend/common/services/llm/newsletter_service.py](C:/Dev/news-letter/backend/common/services/llm/newsletter_service.py)
-- [backend/common/services/memory/vector_db.py](C:/Dev/news-letter/backend/common/services/memory/vector_db.py)
-- [backend/common/services/telemetry/workers.py](C:/Dev/news-letter/backend/common/services/telemetry/workers.py)
+- [backend/common/services/llm/newsletter_service.py](C:/Dev/lumeward/backend/common/services/llm/newsletter_service.py)
+- [backend/common/services/memory/vector_db.py](C:/Dev/lumeward/backend/common/services/memory/vector_db.py)
+- [backend/common/services/telemetry/workers.py](C:/Dev/lumeward/backend/common/services/telemetry/workers.py)
 
 ## Supporting Observation
 
@@ -122,6 +122,6 @@ Add a separate short-lived recent clipboard store for direct lookup, instead of 
 
 A verification script was added here:
 
-- [verify_clipboard_runtime_optin.py](C:/Dev/news-letter/scripts/verify/verify_clipboard_runtime_optin.py)
+- [verify_clipboard_runtime_optin.py](C:/Dev/lumeward/scripts/verify/verify_clipboard_runtime_optin.py)
 
 Run it with your active Python environment to confirm the mismatch.

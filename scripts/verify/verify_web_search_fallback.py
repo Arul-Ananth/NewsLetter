@@ -1,4 +1,5 @@
 import sys
+import warnings
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
@@ -16,14 +17,18 @@ def main() -> int:
 
     try:
         import importlib
+
+        importlib.import_module("ddgs")
         importlib.import_module("lxml.etree")
     except Exception as exc:
-        print(f"FAIL: lxml missing for fallback search: {exc}")
-        print("Install with: pip install lxml")
+        print(f"FAIL: fallback dependency missing: {exc}")
+        print("Install with: pip install ddgs lxml")
         return 1
 
     tool = WebSearchTool(serper_api_key=None, allow_fallback=True)
-    result = tool.run("latest python release notes")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = tool.run("latest python release notes")
     print("--- Web Search Fallback Result ---")
     print(result)
 
@@ -36,6 +41,9 @@ def main() -> int:
         return 1
     if not result.strip():
         print("FAIL: empty search response.")
+        return 1
+    if any("renamed to `ddgs`" in str(w.message) for w in caught):
+        print("FAIL: deprecated duckduckgo_search runtime warning still emitted.")
         return 1
     return 0
 

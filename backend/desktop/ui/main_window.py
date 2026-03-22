@@ -23,6 +23,7 @@ from backend.desktop.ui.global_hotkey import GlobalHotkeyManager
 from backend.desktop.ui.overlay import ScreenSnipperOverlay
 from backend.desktop.ui.settings_dialog import SettingsDialog
 from backend.desktop.ui.signal_bus import get_signal_bus
+from backend.common.services.llm.tool_policy import describe_search_mode
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class MainWindow(QMainWindow):
         self._ocr_worker: OCRWorker | None = None
         self._context_fragments: list[str] = []
 
-        self.setWindowTitle("AeroBrief AI Newsletter")
+        self.setWindowTitle("Lumeward")
         self.resize(900, 700)
         self.setAcceptDrops(True)
         self.statusBar()
@@ -151,6 +152,7 @@ class MainWindow(QMainWindow):
             "openai_api_key": get_secret("openai_api_key"),
             "serper_api_key": get_secret("serper_api_key"),
         }
+        self.signal_bus.log_message.emit(describe_search_mode(api_keys=api_keys))
 
         self._ai_worker = AIWorker(topic, context, self.user_id, self.session_id, api_keys)
         self._ai_worker.progress_update.connect(self.signal_bus.progress_update)

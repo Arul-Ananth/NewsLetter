@@ -1,9 +1,9 @@
-# AeroBrief: OpenClaw-Style Capability Plan with Privacy and Security
+# Lumeward: OpenClaw-Style Capability Plan with Privacy and Security
 
 Date: 2026-03-16  
 Scope: Current repository implementation review + OpenClaw docs mapping + Python dependency standards audit.
 
-## 1) Current AeroBrief Functionality (Implementation-Aligned)
+## 1) Current Lumeward Functionality (Implementation-Aligned)
 
 ### 1.1 Runtime modes
 - Server mode (`backend/main.py`):
@@ -62,7 +62,7 @@ Scope: Current repository implementation review + OpenClaw docs mapping + Python
 
 ## 2) OpenClaw-Parity Recommendations (Privacy/Security-First)
 
-OpenClaw docs emphasize treating AI actions as untrusted, strict isolation, and least privilege controls. To replicate that style in AeroBrief while improving privacy:
+OpenClaw docs emphasize treating AI actions as untrusted, strict isolation, and least privilege controls. To replicate that style in Lumeward while improving privacy:
 
 ### 2.1 Adopt an explicit zero-trust agent execution model (P0)
 - Treat agent tool execution as untrusted workload.

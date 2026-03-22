@@ -2,8 +2,9 @@ import logging
 from typing import Optional
 
 import keyring
+from keyring.errors import PasswordDeleteError
 
-SERVICE_NAME = "AeroBrief"
+SERVICE_NAME = "Lumeward"
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ def delete_secret(key: str) -> bool:
     """Delete a secret from the OS keyring."""
     try:
         keyring.delete_password(SERVICE_NAME, key)
+        return True
+    except PasswordDeleteError:
         return True
     except Exception as exc:
         logger.exception("Error deleting keyring for %s: %s", key, exc)

@@ -1,10 +1,12 @@
-﻿"""Shared configuration for server and desktop."""
+"""Shared configuration for server and desktop."""
 import os
 import sys
 from enum import Enum
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_DATA_DIR = Path("./data")
 
 
 class AppMode(str, Enum):
@@ -39,9 +41,15 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     SERPER_API_KEY: str = ""  # Optional
+    ENGINE_ENABLED: bool = False
+    ENGINE_BASE_URL: str = ""
+    ENGINE_API_KEY: str = ""
+    ENGINE_MODEL_NAME: str = ""
+    ENGINE_TIMEOUT_SECONDS: int = 30
+    ENGINE_MAX_RETRIES: int = 2
 
     # Data Storage
-    DATA_DIR: Path = Path("./data")
+    DATA_DIR: Path = DEFAULT_DATA_DIR
 
     # Desktop Data Collection
     DATA_COLLECTION_ENABLED: bool = True
@@ -76,15 +84,48 @@ class Settings(BaseSettings):
     def is_trusted_lan_auth(self) -> bool:
         return self.auth_mode() == AuthMode.TRUSTED_LAN
 
+    def engine_model_name(self) -> str:
+        return self.ENGINE_MODEL_NAME.strip() or self.OPENAI_MODEL_NAME
+
+    def engine_base_url(self) -> str:
+        return self.ENGINE_BASE_URL.strip().rstrip("/")
+
+    def apply_runtime_overrides(
+        self,
+        *,
+        app_mode: AppMode | None = None,
+        auth_mode: AuthMode | None = None,
+        server_host: str | None = None,
+        server_port: int | None = None,
+    ) -> None:
+        if app_mode is not None:
+            self.APP_MODE = app_mode
+        if auth_mode is not None:
+            self.AUTH_MODE = auth_mode
+        if server_host is not None:
+            self.SERVER_HOST = server_host
+        if server_port is not None:
+            self.SERVER_PORT = server_port
+
+    def _desktop_data_dir(self) -> Path:
+        if sys.platform == "win32":
+            appdata = os.environ.get("APPDATA")
+            if appdata:
+                return Path(appdata) / "Lumeward"
+            return Path.home() / "AppData" / "Roaming" / "Lumeward"
+        return Path.home() / ".local" / "share" / "Lumeward"
+
     def configure(self) -> None:
         """Set DATA_DIR based on APP_MODE and ensure it exists."""
-        if self.APP_MODE == AppMode.DESKTOP:
-            if sys.platform == "win32":
-                appdata = os.environ.get("APPDATA")
-                base_dir = Path(appdata) / "AeroBrief" if appdata else Path.home() / "AppData" / "Roaming" / "AeroBrief"
-            else:
-                base_dir = Path.home() / ".local" / "share" / "AeroBrief"
-            self.DATA_DIR = base_dir
+        data_dir_override = os.environ.get("DATA_DIR")
+        if data_dir_override:
+            base_dir = Path(data_dir_override)
+        elif self.APP_MODE == AppMode.DESKTOP:
+            base_dir = self._desktop_data_dir()
+        else:
+            base_dir = DEFAULT_DATA_DIR
+
+        self.DATA_DIR = base_dir
 
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
 

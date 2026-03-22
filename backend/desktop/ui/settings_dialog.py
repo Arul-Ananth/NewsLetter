@@ -21,7 +21,7 @@ from backend.desktop.preferences import (
     set_clipboard_store_raw_text_enabled,
     set_data_collection_enabled,
 )
-from backend.desktop.security import get_secret, set_secret
+from backend.desktop.security import delete_secret, get_secret, set_secret
 
 
 class SettingsDialog(QDialog):
@@ -76,8 +76,12 @@ class SettingsDialog(QDialog):
 
         if openai_key:
             set_secret("openai_api_key", openai_key)
+        else:
+            delete_secret("openai_api_key")
         if serper_key:
             set_secret("serper_api_key", serper_key)
+        else:
+            delete_secret("serper_api_key")
 
         set_data_collection_enabled(self.data_collection_checkbox.isChecked())
         set_clipboard_collection_enabled(self.clipboard_collection_checkbox.isChecked())

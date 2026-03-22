@@ -1,4 +1,4 @@
-# AeroBrief Build Script for Windows
+# Lumeward Build Script for Windows
 Write-Host "Starting Build Process..."
 
 # Activate Venv
@@ -15,13 +15,13 @@ else {
 # We need to handle hidden imports for dynamic libraries like CrewAI and Qdrant
 # --collect-all might be needed for some packages, but start with --hidden-import
 $imports = "--hidden-import=crewai --hidden-import=qdrant_client --hidden-import=keyring --hidden-import=PySide6 --hidden-import=litellm"
-$paths = "--paths=core --paths=desktop"
+$paths = "--paths=backend --paths=backend/desktop"
 
 Write-Host "Running PyInstaller..."
-pyinstaller --noconfirm --onedir --windowed --name "AeroBrief" $imports $paths desktop/main.py
+pyinstaller --noconfirm --onedir --windowed --name "Lumeward" $imports $paths backend/desktop/main.py
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Build Successful! Executable in dist\AeroBrief\AeroBrief.exe"
+    Write-Host "Build Successful! Executable in dist\Lumeward\Lumeward.exe"
 }
 else {
     Write-Host "Build Failed."

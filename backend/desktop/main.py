@@ -58,13 +58,12 @@ def start_api_server(preferred_port: int = 12345):
 
 
 def main() -> None:
-    settings.APP_MODE = AppMode.DESKTOP
     settings.configure()
     configure_logging(settings.APP_MODE.value)
 
     app = QApplication(sys.argv)
-    app.setOrganizationName("AeroBrief")
-    app.setApplicationName("AeroBrief")
+    app.setOrganizationName("Lumeward")
+    app.setApplicationName("Lumeward")
     apply_stylesheet(app, theme="dark_teal.xml")
 
     get_signal_bus()
@@ -106,4 +105,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
+    settings.APP_MODE = AppMode.DESKTOP
     main()

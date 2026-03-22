@@ -6,7 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from backend.common.config import settings
 from backend.common.models.sql import AuthIdentity, DerivedMemory, SchemaMigration
 
-sqlite_file_name = "aerobrief.db"
+sqlite_file_name = "lumeward.db"
 sqlite_url = f"sqlite:///{settings.DATA_DIR / sqlite_file_name}"
 
 connect_args = {"check_same_thread": False}

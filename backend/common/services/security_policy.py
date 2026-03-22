@@ -6,9 +6,13 @@ import logging
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-logger = logging.getLogger("aerobrief.security")
+from backend.common.config import settings
+
+logger = logging.getLogger("lumeward.security")
 
 ALLOWED_NETWORK_ACTIONS = {
+    "engine.health",
+    "engine.request",
     "search.serper",
     "search.discovery",
     "search.fetch",
@@ -23,6 +27,24 @@ class PolicyDecision:
     target: str
 
 
+def _normalized_origin(target: str) -> tuple[str, str, int] | None:
+    parsed = urlparse(target)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return None
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme, parsed.hostname, port
+
+
+def _is_configured_engine_target(target: str) -> bool:
+    if not settings.ENGINE_ENABLED:
+        return False
+    engine_origin = _normalized_origin(settings.engine_base_url())
+    target_origin = _normalized_origin(target)
+    return engine_origin is not None and engine_origin == target_origin
+
+
 def authorize_network_action(action: str, target: str) -> PolicyDecision:
     if action not in ALLOWED_NETWORK_ACTIONS:
         return PolicyDecision(False, "action_not_allowed", action, target)
@@ -34,6 +56,11 @@ def authorize_network_action(action: str, target: str) -> PolicyDecision:
     host = parsed.hostname
     if not host:
         return PolicyDecision(False, "missing_host", action, target)
+
+    if action.startswith("engine."):
+        if _is_configured_engine_target(target):
+            return PolicyDecision(True, "allowed", action, target)
+        return PolicyDecision(False, "engine_target_not_allowlisted", action, target)
 
     try:
         ip = ipaddress.ip_address(host)

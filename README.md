@@ -1,4 +1,4 @@
-AeroBrief Desktop Notes
+Lumeward Desktop Notes
 
 - OCR requires `easyocr` and `Pillow`.
 - The browser bridge tries port `12345` first, then falls back to an OS-assigned port and logs the selected port in the output pane.
@@ -36,6 +36,21 @@ Server configuration
   - `AUTH_MODE=interactive` for sign-in/sign-up + authenticated API access
   - `TRUSTED_LAN_MODE` remains a backward-compatible fallback for older env files
 - Frontend API base URL uses `VITE_API_BASE_URL` (default `http://127.0.0.1:8000`).
+- Runtime overrides are also available from the CLI:
+  - `python backend/main.py --mode desktop`
+  - `python backend/main.py --mode server --host 0.0.0.0 --port 8000`
+  - `python backend/main.py --mode server --auth-mode interactive --reload`
+
+Remote engine configuration
+
+- Lumeward can call an OpenAI-compatible engine running on another machine.
+- Set:
+  - `ENGINE_ENABLED=true`
+  - `ENGINE_BASE_URL=http://<engine-host>:<port>/v1`
+  - `ENGINE_API_KEY=<service-key>`
+  - `ENGINE_MODEL_NAME=<remote-model>` or reuse `OPENAI_MODEL_NAME`
+- When enabled, the backend keeps auth, memory, telemetry, search policy, and persistence locally and sends only model requests to the remote engine.
+- The engine URL must match the configured allowlist exactly; the backend will reject other private-network outbound targets.
 
 Example trusted-LAN setup
 
@@ -74,3 +89,4 @@ Networking note
 - Open inbound firewall access to `SERVER_PORT` on the backend machine for LAN clients.
 - `trusted_lan` is for private LAN use only.
 - `interactive` now uses server-stored opaque sessions exposed through a transport-neutral auth resolver so future cookie, token, or external-provider adapters can be added without rewriting business routes.
+- The remote engine should stay private to the backend; do not expose it directly to browsers.
