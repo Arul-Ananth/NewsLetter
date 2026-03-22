@@ -1,92 +1,139 @@
-Lumeward Desktop Notes
+# Lumeward
 
-- OCR requires `easyocr` and `Pillow`.
-- The browser bridge tries port `12345` first, then falls back to an OS-assigned port and logs the selected port in the output pane.
-- The web app now supports two explicit auth modes:
-  - `AUTH_MODE=trusted_lan`: shared LAN user, no browser sign-in required
-  - `AUTH_MODE=interactive`: sign-in/sign-up screens stay active and routes require an authenticated principal
+Lumeward is a hybrid AI brief/newsletter application with shared backend services and two runtime modes:
 
-Project Layout
+- `SERVER` for web clients
+- `DESKTOP` for the PySide6 desktop app
 
-- `backend/` application backend (shared + server + desktop)
-  - `backend/common/services/auth/` auth providers, session transport, resolver, and identity store helpers
-  - `backend/common/services/llm/` LLM provider + crew orchestration
-  - `backend/common/services/memory/` memory sanitizer + vector helpers
-  - `backend/common/services/search/` web search tools
-  - `backend/common/services/telemetry/` telemetry pipeline
-- `frontend/` React + Vite web client
-  - `frontend/src/features/auth/` non-trusted-LAN auth UI and client state
-- `scripts/verify/` verification scripts
-- `scripts/manual/` manual checks
-- `scripts/dev/` operational/dev scripts (build and firewall helpers)
-- `scripts/fixtures/ingestion/` sample ingestion fixtures
-- `docs/architecture/` architecture and remediation docs
-- `docs/audits/` issue audits and findings
-- `docs/prompts/` system/context prompts
-- `packaging/pyinstaller/` desktop packaging specs
+## Current Implemented State
 
-Server configuration
+### Core runtime
 
-- Backend networking uses env vars:
-  - `SERVER_HOST` (default `127.0.0.1`)
-  - `SERVER_PORT` (default `8000`)
-  - `CORS_ALLOWED_ORIGINS` (comma-separated, default `http://localhost:5173`)
-- Auth is mode-driven:
-  - `AUTH_MODE=trusted_lan` for private LAN access
-  - `AUTH_MODE=interactive` for sign-in/sign-up + authenticated API access
-  - `TRUSTED_LAN_MODE` remains a backward-compatible fallback for older env files
-- Frontend API base URL uses `VITE_API_BASE_URL` (default `http://127.0.0.1:8000`).
-- Runtime overrides are also available from the CLI:
-  - `python backend/main.py --mode desktop`
-  - `python backend/main.py --mode server --host 0.0.0.0 --port 8000`
-  - `python backend/main.py --mode server --auth-mode interactive --reload`
+- CLI startup overrides are implemented in `backend/main.py`:
+  - `--mode {desktop,server}`
+  - `--auth-mode {trusted_lan,interactive}`
+  - `--host`
+  - `--port`
+  - `--reload`
+- Runtime precedence is:
+  - CLI flags
+  - environment variables
+  - code defaults
 
-Remote engine configuration
+### Auth and deployment
+
+- Web/server mode supports:
+  - `AUTH_MODE=trusted_lan`
+  - `AUTH_MODE=interactive`
+- Desktop mode always resolves to the local trusted-lan style path.
+- `modes.md` is the operator-facing source of truth for runtime and trust modes.
+
+### Remote engine support
 
 - Lumeward can call an OpenAI-compatible engine running on another machine.
-- Set:
-  - `ENGINE_ENABLED=true`
-  - `ENGINE_BASE_URL=http://<engine-host>:<port>/v1`
-  - `ENGINE_API_KEY=<service-key>`
-  - `ENGINE_MODEL_NAME=<remote-model>` or reuse `OPENAI_MODEL_NAME`
-- When enabled, the backend keeps auth, memory, telemetry, search policy, and persistence locally and sends only model requests to the remote engine.
-- The engine URL must match the configured allowlist exactly; the backend will reject other private-network outbound targets.
+- When enabled, Lumeward keeps auth, memory, telemetry, persistence, and tool policy locally and sends only model requests to the remote engine.
 
-Example trusted-LAN setup
+### Desktop telemetry and clipboard
 
-Backend machine `.env`:
+- Desktop telemetry is opt-in.
+- Clipboard collection is opt-in.
+- Raw clipboard text is separately opt-in.
+- Recent clipboard-history queries use a direct recent-clipboard path instead of only semantic memory retrieval.
 
-```env
-APP_MODE=SERVER
-SECRET_KEY=replace_me
-AUTH_MODE=trusted_lan
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
-CORS_ALLOWED_ORIGINS=http://192.168.1.20:5173
-TRUSTED_LAN_USER_EMAIL=local@lan
-TRUSTED_LAN_USER_NAME=Trusted LAN User
+### Search behavior
+
+- Serper is used when a Serper key is available.
+- Desktop fallback search uses `ddgs` + extraction when Serper is unavailable.
+- Search mode is surfaced in the desktop UI.
+
+### Desktop UI
+
+- The desktop UI is now framed as a brief assistant rather than only a newsletter form.
+- The main desktop screen is organized into:
+  - `Ask`
+  - `Guide`
+  - `Run`
+  - `Result`
+- Desktop settings include theme preference:
+  - `System Default`
+  - `Dark`
+  - `Light`
+- Theme changes apply immediately without restart.
+- The main desktop view is wrapped in a scroll area so the whole screen can be reached with the mouse wheel.
+
+### Desktop bridge
+
+- The local browser bridge stays on loopback.
+- It uses a runtime-generated bridge token header.
+- Uvicorn lifespan handling is disabled for the bridge app to avoid noisy shutdown `CancelledError` traces.
+
+## Project Layout
+
+- `backend/` shared backend, server mode, desktop mode
+- `frontend/` React + Vite web client
+- `docs/` architecture, audits, prompts, roadmap/status notes
+- `scripts/verify/` verification scripts
+- `scripts/manual/` manual checks
+- `scripts/dev/` build and operational scripts
+- `packaging/pyinstaller/` desktop packaging specs
+
+## Startup
+
+Server:
+
+```powershell
+cd C:\Dev\lumeward
+.\venv_win\Scripts\python.exe backend\main.py --mode server
 ```
 
-Frontend machine env (for Vite):
+Desktop:
 
-```env
-VITE_API_BASE_URL=http://192.168.1.10:8000
+```powershell
+cd C:\Dev\lumeward
+.\venv_win\Scripts\python.exe backend\main.py --mode desktop
 ```
 
-Example interactive setup
+Interactive server:
 
-```env
-APP_MODE=SERVER
-SECRET_KEY=replace_me
-AUTH_MODE=interactive
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
-CORS_ALLOWED_ORIGINS=http://192.168.1.20:5173
+```powershell
+.\venv_win\Scripts\python.exe backend\main.py --mode server --auth-mode interactive --host 0.0.0.0 --port 8000
 ```
 
-Networking note
+## Docs
 
-- Open inbound firewall access to `SERVER_PORT` on the backend machine for LAN clients.
-- `trusted_lan` is for private LAN use only.
-- `interactive` now uses server-stored opaque sessions exposed through a transport-neutral auth resolver so future cookie, token, or external-provider adapters can be added without rewriting business routes.
-- The remote engine should stay private to the backend; do not expose it directly to browsers.
+- [modes.md](./modes.md): runtime modes, trust profiles, connectivity profiles
+- [docs/architecture/overview.md](./docs/architecture/overview.md): current codebase structure and implementation shape
+- [docs/security.md](./docs/security.md): trust boundaries and safeguards
+- [docs/roadmap.md](./docs/roadmap.md): implemented work so far plus possible future items that may or may not happen
+
+## Future Items
+
+Potential future work is tracked in [docs/roadmap.md](./docs/roadmap.md).
+Those items are directional only unless explicitly scheduled; they are not commitments.
+
+
+
+## Linux Desktop Setup
+
+For Linux or WSL desktop testing, use the Linux-specific desktop requirements file:
+
+```bash
+cd /mnt/c/Dev/lumeward
+python3 -m venv .venv_linux
+source .venv_linux/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-desktop-linux.txt
+python backend/main.py --mode desktop
+```
+
+Recommended OS packages on Debian/Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv libgl1 libglib2.0-0 libxkbcommon-x11-0 libdbus-1-3 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 gnome-keyring libsecret-1-0 libsecret-1-dev dbus-user-session
+```
+
+Notes:
+- `requirements-desktop-linux.txt` adds the CrewAI Google provider extra used by `LLM_PROVIDER=google`.
+- It also installs Linux keyring backends so desktop secret access works more reliably for other developers.
+- In WSL, a working GUI environment is still required for PySide6 desktop mode.

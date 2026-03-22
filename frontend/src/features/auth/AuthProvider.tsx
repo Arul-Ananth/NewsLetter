@@ -8,22 +8,38 @@ import {
     type ReactNode,
 } from 'react';
 
+import { ApiError } from '../../services/http';
 import { getAuthStatus, login as loginRequest, logout as logoutRequest, signup as signupRequest } from './api';
 import { clearSessionToken, getSessionToken, setSessionToken } from './storage';
-import type { AuthContextValue, AuthStatusResponse, SignupResponse } from './types';
+import { buildOfflineAuthStatus, type AuthContextValue, type AuthStatusResponse, type SignupResponse } from './types';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function normalizeAuthBootstrapError(error: unknown): AuthStatusResponse {
+    if (error instanceof ApiError && error.status === 0) {
+        return buildOfflineAuthStatus(error.message);
+    }
+    if (error instanceof Error) {
+        return buildOfflineAuthStatus(error.message);
+    }
+    return buildOfflineAuthStatus('Unable to determine backend auth status.');
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<AuthStatusResponse | null>(null);
 
     const refreshStatus = useCallback(async () => {
-        const nextStatus = await getAuthStatus();
-        if (!nextStatus.authenticated && getSessionToken()) {
+        try {
+            const nextStatus = await getAuthStatus();
+            if (!nextStatus.authenticated && getSessionToken()) {
+                clearSessionToken();
+            }
+            setStatus(nextStatus);
+        } catch (error) {
             clearSessionToken();
+            setStatus(normalizeAuthBootstrapError(error));
         }
-        setStatus(nextStatus);
     }, []);
 
     useEffect(() => {
@@ -36,6 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
                 if (active) {
                     setStatus(nextStatus);
+                }
+            } catch (error) {
+                clearSessionToken();
+                if (active) {
+                    setStatus(normalizeAuthBootstrapError(error));
                 }
             } finally {
                 if (active) {
@@ -69,8 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await logoutRequest();
         } finally {
             clearSessionToken();
-            const nextStatus = await getAuthStatus();
-            setStatus(nextStatus);
+            try {
+                const nextStatus = await getAuthStatus();
+                setStatus(nextStatus);
+            } catch (error) {
+                setStatus(normalizeAuthBootstrapError(error));
+            }
         }
     }, []);
 

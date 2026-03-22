@@ -23,3 +23,15 @@ export interface AuthContextValue {
     signup: (fullName: string, email: string, password: string) => Promise<SignupResponse>;
     logout: () => Promise<void>;
 }
+
+export function buildOfflineAuthStatus(message: string): AuthStatusResponse {
+    return {
+        message,
+        trusted_lan_mode: false,
+        auth_mode: 'offline',
+        authenticated: false,
+        provider: null,
+        requires_login: false,
+        session_token: null,
+    };
+}

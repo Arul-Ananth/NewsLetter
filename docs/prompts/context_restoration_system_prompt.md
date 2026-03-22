@@ -12,18 +12,21 @@ The assistant's job is to help developers work on Lumeward accurately and pragma
 
 ## 2. Product Summary
 
-Lumeward is a hybrid AI newsletter application with two runtime modes built on a shared backend core.
+Lumeward is a hybrid AI brief assistant with two runtime modes built on a shared backend core.
 
 - `SERVER` mode:
   - FastAPI backend for web clients.
   - React + Vite frontend.
-  - Trusted LAN mode for web access in the current phase, with `/auth` + `/news` endpoints still present.
+  - Supports `trusted_lan` and `interactive` auth profiles.
+  - Can route model calls through a remote OpenAI-compatible engine while keeping app state and policy local.
 - `DESKTOP` mode:
   - PySide6 desktop app.
   - Local bridge process for browser-to-desktop ingestion.
-  - OCR, screen snipping, file ingestion, and telemetry pipeline.
+  - OCR, screen snipping, file ingestion, clipboard telemetry, and brief generation.
+  - Desktop UI is organized into `Ask`, `Guide`, `Run`, and `Result` sections.
+  - Desktop settings include appearance control with `system`, `dark`, and `light` theme modes.
 
-The app uses CrewAI agents to research a topic and produce a short Markdown newsletter.
+The app uses CrewAI agents to research a topic and produce a short Markdown brief or newsletter-style output.
 
 ## 3. Assistant Role and Boundaries
 
@@ -47,24 +50,25 @@ Top-level structure:
 - `docs/`
 - `scripts/`
 - `packaging/`
-- `legacy_archive/`
 
 Important documentation:
 
 - `docs/architecture/overview.md`
 - `docs/architecture/openclaw_parity_privacy_security_recommendations.md`
+- `docs/roadmap.md`
 - `docs/audits/issues.md`
 - `docs/prompts/system_prompt.md`
 - `docs/prompts/context_restoration_system_prompt.md`
 - `README.md`
 - `CONTRIBUTING.md`
+- `modes.md`
 
 ## 5. Backend Structure
 
 Shared backend:
 
 - `backend/common/config.py`
-  - Shared settings loaded from project-root `.env`.
+  - Shared settings loaded from project-root `.env`, plus runtime override handling.
 - `backend/common/database.py`
   - SQLModel engine, session provider, startup migration helper.
 - `backend/common/models/schemas.py`
@@ -75,26 +79,20 @@ Shared backend:
 Service domains:
 
 - `backend/common/services/auth/`
-  - Password hashing and auth-related helpers for the current trusted-LAN phase.
+  - Password hashing and auth/session helpers.
 - `backend/common/services/llm/`
-  - LLM provider factory, search-tool policy, CrewAI construction, newsletter orchestration.
+  - LLM provider factory, search-tool policy, CrewAI construction, brief orchestration.
 - `backend/common/services/memory/`
-  - Memory sanitizer and vector DB helpers.
+  - Memory sanitizer and vector DB helpers, including recent clipboard retrieval.
 - `backend/common/services/search/`
-  - Web search tools and fallback search behavior.
+  - Web search tools and desktop fallback search behavior.
 - `backend/common/services/telemetry/`
   - Event bus, ingestion pipeline, consent storage, session rollups.
+- `backend/common/services/network/`
+  - Shared outbound HTTP client helpers.
 
-Compatibility wrappers still exist under:
 
-- `backend/common/services/auth_utils.py`
-- `backend/common/services/newsletter_service.py`
-- `backend/common/services/vector_db.py`
-- `backend/common/services/web_search.py`
-- `backend/common/services/memory_sanitizer.py`
-- `backend/common/services/crew_agent.py`
 
-These wrappers are transitional and should not be treated as the preferred import targets for new code.
 
 ## 6. Server Mode
 
@@ -106,8 +104,10 @@ Behavior:
 
 - Resolves runtime mode from CLI first, then env.
 - Starts FastAPI when the resolved mode is `SERVER`.
-- Requires `SECRET_KEY` to be set for non-trusted-LAN server mode.
+- Supports `trusted_lan` and `interactive` auth modes.
+- Requires `SECRET_KEY` for `interactive` mode.
 - Uses env/CLI-driven bind host/port and CORS.
+- Can optionally route model calls to a remote OpenAI-compatible engine.
 
 Routes:
 
@@ -120,6 +120,7 @@ Routes:
 
 Relevant files:
 
+- `backend/server/app.py`
 - `backend/server/routers/auth.py`
 - `backend/server/routers/news.py`
 - `backend/server/dependencies.py`
@@ -136,12 +137,15 @@ Behavior:
 - Runs when the resolved runtime mode is `DESKTOP`.
 - Creates a fixed local desktop user if needed.
 - Starts the PySide6 app with qasync.
+- Applies the resolved desktop theme before showing the main window.
 - Starts a separate-process local bridge via `backend/desktop/services/api_server.py`.
 
 Desktop UI:
 
-- Main window: `backend/desktop/ui/main_window.py`
+- Main window coordinator: `backend/desktop/ui/main_window.py`
+- Main window view builder: `backend/desktop/ui/main_window_view.py`
 - Settings dialog: `backend/desktop/ui/settings_dialog.py`
+- Theme helper: `backend/desktop/theme.py`
 - Signal bus: `backend/desktop/ui/signal_bus.py`
 - Screen snipper overlay: `backend/desktop/ui/overlay.py`
 - Global hotkey: `backend/desktop/ui/global_hotkey.py`
@@ -153,6 +157,13 @@ Desktop workers/services:
 - Local bridge: `backend/desktop/services/api_server.py`
 - Preferences: `backend/desktop/preferences.py`
 - Keyring access: `backend/desktop/security.py`
+
+Current desktop behavior:
+
+- Uses a scrollable page layout through a top-level `QScrollArea`.
+- Separates user-authored guidance from attached OCR/bridge/file context.
+- Exposes search mode and activity/status in the run section.
+- Supports result actions for copy, regenerate, clear, and save-as-markdown.
 
 ## 8. LLM and Agent Pipeline
 
@@ -170,13 +181,14 @@ Supporting modules:
 Current behavior:
 
 - CrewAI researcher + writer flow.
-- Provider selected via `LLM_PROVIDER`.
-- Supported provider values:
+- Provider selected via `LLM_PROVIDER`, unless remote engine mode is enabled.
+- Supported direct provider values:
   - `ollama`
   - `openai`
   - `google`
 - Search tools are attached based on API keys and runtime mode.
 - Memory context is retrieved from vector storage and sanitized before use.
+- Time-sensitive prompts are grounded to the runtime date.
 
 ## 9. Search and Memory
 
@@ -187,7 +199,8 @@ Search tools:
 Behavior:
 
 - Uses Serper when `SERPER_API_KEY` or request-supplied Serper key is present.
-- Uses DuckDuckGo + trafilatura fallback in desktop mode when no Serper key is available.
+- Uses `ddgs` + extraction fallback in desktop mode when no Serper key is available.
+- Search mode resolves to `serper`, `fallback`, or `disabled`.
 - Registered tool names are:
   - `Web Search`
   - `Web Search (Google)`
@@ -202,6 +215,11 @@ Collections:
 - `user_documents`
 - `session_memory`
 - `user_profile`
+
+Current memory behavior:
+
+- Clipboard-history prompts check recent clipboard context before semantic retrieval.
+- Current-date prompts prefer grounded context over model-only recall.
 
 ## 10. Telemetry and Ingestion
 
@@ -226,7 +244,9 @@ Telemetry services:
 Current telemetry behavior:
 
 - Runs in a dedicated background runtime, not the UI loop.
+- Desktop telemetry is opt-in.
 - Clipboard collection is opt-in.
+- Raw clipboard text is separately opt-in.
 - Folder watch is opt-in and consent-backed.
 - Session summaries and user profile rollups are persisted with user association.
 
@@ -244,8 +264,8 @@ Important files:
 
 - `frontend/src/App.tsx`
 - `frontend/src/pages/Dashboard.tsx`
-- `frontend/src/pages/SignIn.tsx`
-- `frontend/src/pages/SignUp.tsx`
+- `frontend/src/features/auth/pages/SignInPage.tsx`
+- `frontend/src/features/auth/pages/SignUpPage.tsx`
 - `frontend/src/services/api.ts`
 - `frontend/src/context/SettingsContext.tsx`
 - `frontend/src/theme/theme.ts`
@@ -274,6 +294,7 @@ Scripts:
 Core:
 
 - `APP_MODE`
+- `AUTH_MODE`
 - `SECRET_KEY`
 - `SERVER_HOST`
 - `SERVER_PORT`
@@ -287,8 +308,13 @@ LLM/Search:
 - `OPENAI_API_BASE`
 - `OPENAI_MODEL_NAME`
 - `OPENAI_API_KEY`
+- `GOOGLE_API_KEY`
 - `GEMINI_API_KEY`
 - `SERPER_API_KEY`
+- `ENGINE_ENABLED`
+- `ENGINE_BASE_URL`
+- `ENGINE_API_KEY`
+- `ENGINE_MODEL_NAME`
 
 Storage/telemetry:
 
@@ -313,6 +339,13 @@ cd C:\Dev\lumeward
 .\venv_win\Scripts\python.exe backend\main.py --mode desktop
 ```
 
+Interactive server mode:
+
+```powershell
+cd C:\Dev\lumeward
+.\venv_win\Scripts\python.exe backend\main.py --mode server --auth-mode interactive --host 0.0.0.0 --port 8000
+```
+
 Frontend dev mode:
 
 ```powershell
@@ -327,10 +360,10 @@ Note:
 
 ## 15. Current Known Caveats
 
-- Web mode currently runs in trusted LAN mode with no browser auth and shared memory/profile state.
+- `untrusted` is documentation terminology; the runtime auth enum is still `interactive`.
 - Billing still uses placeholder token counts in `backend/server/routers/news.py`.
 - `Web Search (Google)` is currently a renamed subclass, not a distinct Google API implementation.
-- Search fallback now prefers `ddgs` + `trafilatura`.
+- Some telemetry code still uses deprecated `datetime.utcnow()` and should be cleaned up later.
 - Heavy embedding initialization still exists in memory/vector paths.
 - Some old docs may reference pre-refactor service paths; prefer the domain-based paths under `backend/common/services/`.
 
@@ -340,6 +373,7 @@ When answering or editing:
 
 - Prefer the new service-domain imports for new code.
 - Treat `docs/architecture/overview.md` as the high-level structural reference.
+- Treat `docs/roadmap.md` as the source for separating implemented behavior from optional future items.
 - Treat code as the source of truth over prompt docs if there is any mismatch.
 - Keep suggestions pragmatic and implementation-aligned.
 - If a path or behavior looks stale, verify it in the code before relying on it.
@@ -352,3 +386,5 @@ When answering or editing:
 - Explicit about file paths, commands, and assumptions
 
 If the assistant needs to explain functionality, it should point to concrete files and current module paths, not legacy descriptions.
+
+

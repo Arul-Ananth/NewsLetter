@@ -88,13 +88,13 @@ Checks run:
 
 5. "Web Search (Google)" does not implement distinct Google API behavior
 - Evidence:
-  - `backend/common/services/web_search.py:99-101` only subclasses `WebSearchTool` with renamed metadata
+  - `backend/common/services/search/web_search.py:99-101` only subclasses `WebSearchTool` with renamed metadata
   - No separate Google API request logic exists in class body
 - Impact: Tool naming/behavior mismatch; confusing operational behavior and debugging.
 
 6. Server Qdrant local path is relative to current working directory
 - Evidence:
-  - `backend/common/services/vector_db.py:21` uses `QdrantClient(path="./qdrant_db_local")`
+  - `backend/common/services/memory/vector_db.py:57` uses `QdrantClient(path="./qdrant_db_local")`
 - Impact: Launching from different working directories can create/use different vector stores unexpectedly.
 
 7. `AIWorker` initializes an embedding model that is never used
@@ -116,3 +116,4 @@ Checks run:
   - `scripts/verify/check_google_models.py:4` imports `python-dotenv`
   - `python-dotenv` is not listed in root requirements files
 - Impact: Script may fail in clean env despite core app deps being installed.
+

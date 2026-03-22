@@ -3,24 +3,61 @@
 ## Runtime Modes
 
 - `SERVER` mode runs FastAPI for web clients.
-- `DESKTOP` mode runs PySide6 + qasync with local bridge + telemetry runtime.
+- `DESKTOP` mode runs PySide6 + qasync with a local bridge and background telemetry runtime.
+- Runtime resolution is centralized in `backend/main.py` and follows:
+  - CLI flags
+  - environment variables
+  - code defaults
 
-## Backend Structure
+## Current Implemented Architecture
 
-- `backend/common/`
-  - `config.py` shared settings and env loading
-  - `database.py` SQLModel engine/session/migrations
-  - `models/` API and DB models
-  - `services/`
-    - `auth/` authentication utilities (password hashing and trusted-LAN helpers)
-    - `llm/` provider factory, tool policy, crew builders, newsletter orchestration
-    - `memory/` memory sanitizer + vector DB helpers
-    - `search/` web search tools and fallbacks
-    - `telemetry/` event bus, ingestion, workers, consent
-- `backend/server/`
-  - FastAPI routers and auth dependencies
-- `backend/desktop/`
-  - Qt desktop UI, workers, bridge process, preferences/security
+### Backend core
+
+- `backend/common/config.py`
+  - shared settings, mode/auth resolution, desktop data-dir selection
+- `backend/common/database.py`
+  - SQLModel engine/session setup
+- `backend/common/services/`
+  - `auth/` web identity/session helpers
+  - `llm/` provider factory, tool policy, crew builders, newsletter/brief orchestration
+  - `memory/` vector and clipboard-history retrieval helpers
+  - `search/` Serper and desktop fallback search
+  - `telemetry/` consent, ingestion, workers, session/profile rollups
+
+### Server mode
+
+- App factory lives in `backend/server/app.py`.
+- Web auth supports `trusted_lan` and `interactive` modes.
+- Remote OpenAI-compatible engine support is optional and stays behind the backend.
+
+### Desktop mode
+
+- Desktop entrypoint lives in `backend/desktop/main.py`.
+- Desktop startup now applies saved theme preference before showing the main window.
+- The main desktop UI is organized into:
+  - `Ask`
+  - `Guide`
+  - `Run`
+  - `Result`
+- The desktop UI is scrollable at the page level and still keeps output telemetry on the result pane.
+- Desktop settings now group:
+  - appearance
+  - API keys
+  - ingestion
+  - privacy
+
+### Search and current-date behavior
+
+- Search mode resolves to `serper`, `fallback`, or `disabled`.
+- Desktop fallback search uses `ddgs` plus extraction.
+- Time-sensitive prompts are grounded to runtime date context.
+- Clipboard-history prompts use a direct recent-clipboard path before falling back to semantic memory.
+
+### Desktop bridge
+
+- The bridge is loopback-only and token-protected.
+- It prefers port `12345`, then falls back to an OS-assigned port.
+- Uvicorn lifespan is disabled for the bridge app to prevent shutdown noise.
 
 ## Service Layer Conventions
 
@@ -30,17 +67,22 @@
 - Keep external network tools isolated under `services/search/`.
 - Use compatibility wrappers in `services/*.py` only for transition/import stability.
 
-## Frontend Structure
-
-- `frontend/src/pages/` route pages
-- `frontend/src/components/` reusable UI components
-- `frontend/src/services/` API client and request helpers
-- `frontend/src/context/` app settings/state context
-- `frontend/src/theme/` theme and providers
-
-## Scripts
+## Scripts and Docs
 
 - `scripts/verify/` automated verification checks only
 - `scripts/manual/` manual diagnostics
-- `scripts/dev/` operational/developer scripts (build/firewall helpers)
-- `scripts/fixtures/` sample data/fixtures for tests and ingestion flows
+- `scripts/dev/` operational/developer scripts
+- `docs/security.md` trust boundaries and safeguards
+- `modes.md` runtime/trust profile documentation
+- `docs/roadmap.md` implemented work and optional future directions
+
+## Possible Future Directions
+
+These are not commitments unless explicitly scheduled:
+
+- stronger public-internet deployment hardening
+- per-user memory isolation across all web modes
+- richer desktop visual polish beyond the current structure/theme work
+- a dedicated remote job/code-execution engine separated from the LLM provider path
+- deeper response typing and billing/accounting cleanup
+- further pruning of legacy compatibility wrappers after import migration finishes
