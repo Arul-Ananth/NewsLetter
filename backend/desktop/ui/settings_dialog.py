@@ -2,9 +2,12 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
+    QGroupBox,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -17,9 +20,11 @@ from backend.desktop.preferences import (
     get_clipboard_collection_enabled,
     get_clipboard_store_raw_text_enabled,
     get_data_collection_enabled,
+    get_theme_mode,
     set_clipboard_collection_enabled,
     set_clipboard_store_raw_text_enabled,
     set_data_collection_enabled,
+    set_theme_mode,
 )
 from backend.desktop.security import delete_secret, get_secret, set_secret
 
@@ -29,40 +34,62 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self._on_saved = on_saved
         self.setWindowTitle("Settings")
-        self.resize(400, 240)
+        self.resize(480, 420)
 
         layout = QVBoxLayout(self)
 
-        layout.addWidget(QLabel("OpenAI API Key (Optional):"))
+        appearance_group = QGroupBox("Appearance")
+        appearance_layout = QFormLayout(appearance_group)
+        self.theme_mode_input = QComboBox()
+        self.theme_mode_input.addItem("System Default", "system")
+        self.theme_mode_input.addItem("Dark", "dark")
+        self.theme_mode_input.addItem("Light", "light")
+        saved_theme_mode = get_theme_mode()
+        index = max(self.theme_mode_input.findData(saved_theme_mode), 0)
+        self.theme_mode_input.setCurrentIndex(index)
+        appearance_layout.addRow("Theme", self.theme_mode_input)
+        layout.addWidget(appearance_group)
+
+        api_group = QGroupBox("API Keys")
+        api_layout = QVBoxLayout(api_group)
+        api_layout.addWidget(QLabel("OpenAI API Key (Optional):"))
         self.openai_input = QLineEdit()
         self.openai_input.setEchoMode(QLineEdit.Password)
         self.openai_input.setText(get_secret("openai_api_key") or "")
-        layout.addWidget(self.openai_input)
+        api_layout.addWidget(self.openai_input)
 
-        layout.addWidget(QLabel("Serper API Key (For Web Search):"))
+        api_layout.addWidget(QLabel("Serper API Key (For Web Search):"))
         self.serper_input = QLineEdit()
         self.serper_input.setEchoMode(QLineEdit.Password)
         self.serper_input.setText(get_secret("serper_api_key") or "")
-        layout.addWidget(self.serper_input)
+        api_layout.addWidget(self.serper_input)
+        layout.addWidget(api_group)
 
-        layout.addWidget(QLabel("Watched Folders (opt-in for ingestion):"))
+        ingestion_group = QGroupBox("Ingestion")
+        ingestion_layout = QVBoxLayout(ingestion_group)
+        ingestion_layout.addWidget(QLabel("Watched Folders (opt-in for ingestion):"))
         self.add_folder_btn = QPushButton("Add Folder to Watch")
         self.add_folder_btn.clicked.connect(self.add_folder)
-        layout.addWidget(self.add_folder_btn)
+        ingestion_layout.addWidget(self.add_folder_btn)
+        layout.addWidget(ingestion_group)
+
+        privacy_group = QGroupBox("Privacy")
+        privacy_layout = QVBoxLayout(privacy_group)
 
         self.data_collection_checkbox = QCheckBox("Enable desktop telemetry data collection")
         self.data_collection_checkbox.setChecked(get_data_collection_enabled())
         self.data_collection_checkbox.toggled.connect(self._on_data_collection_toggled)
-        layout.addWidget(self.data_collection_checkbox)
+        privacy_layout.addWidget(self.data_collection_checkbox)
 
         self.clipboard_collection_checkbox = QCheckBox("Enable clipboard collection (opt-in)")
         self.clipboard_collection_checkbox.setChecked(get_clipboard_collection_enabled())
         self.clipboard_collection_checkbox.toggled.connect(self._on_clipboard_collection_toggled)
-        layout.addWidget(self.clipboard_collection_checkbox)
+        privacy_layout.addWidget(self.clipboard_collection_checkbox)
 
         self.clipboard_raw_checkbox = QCheckBox("Store raw clipboard text (higher sensitivity)")
         self.clipboard_raw_checkbox.setChecked(get_clipboard_store_raw_text_enabled())
-        layout.addWidget(self.clipboard_raw_checkbox)
+        privacy_layout.addWidget(self.clipboard_raw_checkbox)
+        layout.addWidget(privacy_group)
         self._on_data_collection_toggled(self.data_collection_checkbox.isChecked())
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -73,6 +100,7 @@ class SettingsDialog(QDialog):
     def save_settings(self) -> None:
         openai_key = self.openai_input.text().strip()
         serper_key = self.serper_input.text().strip()
+        theme_mode = str(self.theme_mode_input.currentData())
 
         if openai_key:
             set_secret("openai_api_key", openai_key)
@@ -88,6 +116,7 @@ class SettingsDialog(QDialog):
         set_clipboard_store_raw_text_enabled(
             self.clipboard_collection_checkbox.isChecked() and self.clipboard_raw_checkbox.isChecked()
         )
+        set_theme_mode(theme_mode)
 
         if self._on_saved is not None:
             self._on_saved()

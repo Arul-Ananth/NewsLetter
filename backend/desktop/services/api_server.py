@@ -94,7 +94,7 @@ def run_api_server(
             continue
 
         try:
-            config = uvicorn.Config(app, host=host, port=port, log_level="info")
+            config = uvicorn.Config(app, host=host, port=port, log_level="info", lifespan="off")
             server = uvicorn.Server(config)
         except Exception as exc:
             errors.append(f"uvicorn init failed on port {port}: {exc}")

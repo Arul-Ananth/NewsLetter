@@ -8,7 +8,6 @@ from pathlib import Path
 
 import qasync
 from PySide6.QtWidgets import QApplication
-from qt_material import apply_stylesheet
 from sqlmodel import Session
 
 # Fix path resolution
@@ -20,7 +19,9 @@ from backend.common.config import AppMode, settings
 from backend.common.database import create_db_and_tables, engine
 from backend.common.logging import configure_logging
 from backend.common.services.auth.store import ensure_desktop_local_user
+from backend.desktop.preferences import get_theme_mode
 from backend.desktop.services.api_server import run_api_server
+from backend.desktop.theme import apply_app_theme, install_system_theme_listener
 from backend.desktop.ui.main_window import MainWindow
 from backend.desktop.ui.signal_bus import get_signal_bus
 
@@ -64,7 +65,8 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setOrganizationName("Lumeward")
     app.setApplicationName("Lumeward")
-    apply_stylesheet(app, theme="dark_teal.xml")
+    apply_app_theme(app, get_theme_mode())
+    install_system_theme_listener(app)
 
     get_signal_bus()
 

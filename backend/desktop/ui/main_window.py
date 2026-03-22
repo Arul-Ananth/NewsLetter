@@ -1,31 +1,27 @@
 import logging
 import queue as std_queue
 import time
+from datetime import datetime
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import (
-    QLabel,
-    QLineEdit,
-    QMainWindow,
-    QPushButton,
-    QTextEdit,
-    QToolBar,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QToolBar
 
+from backend.common.services.llm.tool_policy import describe_search_mode, resolve_search_mode
+from backend.desktop.preferences import get_theme_mode
 from backend.desktop.security import get_secret
 from backend.desktop.services.ai_worker import AIWorker
 from backend.desktop.services.ocr_worker import OCRWorker
 from backend.desktop.telemetry_manager import TelemetryManager
+from backend.desktop.theme import apply_app_theme
 from backend.desktop.ui.global_hotkey import GlobalHotkeyManager
+from backend.desktop.ui.main_window_view import PRESET_GUIDANCE, build_main_window_content
 from backend.desktop.ui.overlay import ScreenSnipperOverlay
 from backend.desktop.ui.settings_dialog import SettingsDialog
 from backend.desktop.ui.signal_bus import get_signal_bus
-from backend.common.services.llm.tool_policy import describe_search_mode
 
 logger = logging.getLogger(__name__)
+TIME_SENSITIVE_TERMS = ("today", "todays", "today's", "current", "latest", "recent")
 
 
 class MainWindow(QMainWindow):
@@ -56,9 +52,10 @@ class MainWindow(QMainWindow):
         self._ai_worker: AIWorker | None = None
         self._ocr_worker: OCRWorker | None = None
         self._context_fragments: list[str] = []
+        self._has_result = False
 
         self.setWindowTitle("Lumeward")
-        self.resize(900, 700)
+        self.resize(980, 780)
         self.setAcceptDrops(True)
         self.statusBar()
 
@@ -69,29 +66,22 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self.open_settings)
         toolbar.addAction(settings_action)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-
-        layout.addWidget(QLabel("Newsletter Topic:"))
-        self.topic_input = QLineEdit()
-        self.topic_input.setPlaceholderText("e.g. AI Agents in 2025")
-        layout.addWidget(self.topic_input)
-
-        layout.addWidget(QLabel("Context / Instructions:"))
-        self.context_input = QTextEdit()
-        self.context_input.setPlaceholderText("Enter extra context or focus areas...")
-        self.context_input.setMaximumHeight(100)
-        layout.addWidget(self.context_input)
-
-        self.generate_btn = QPushButton("Generate Newsletter")
+        self.ui = build_main_window_content()
+        self.setCentralWidget(self.ui.central_widget)
+        self.topic_input = self.ui.topic_input
+        self.context_input = self.ui.guidance_input
+        self.output_area = self.ui.output_area
+        self.generate_btn = self.ui.generate_btn
         self.generate_btn.clicked.connect(self.start_generation)
-        layout.addWidget(self.generate_btn)
+        self.ui.regenerate_btn.clicked.connect(self.start_generation)
+        self.ui.copy_btn.clicked.connect(self.copy_result)
+        self.ui.clear_btn.clicked.connect(self.clear_result)
+        self.ui.save_btn.clicked.connect(self.save_result_as_markdown)
+        self.topic_input.textChanged.connect(self._update_action_states)
 
-        layout.addWidget(QLabel("Output:"))
-        self.output_area = QTextEdit()
-        self.output_area.setReadOnly(True)
-        layout.addWidget(self.output_area)
+        for label, button in self.ui.preset_buttons.items():
+            preset_text = PRESET_GUIDANCE[label]
+            button.clicked.connect(lambda _checked=False, text=preset_text: self._apply_guidance_preset(text))
 
         self.signal_bus = get_signal_bus()
         self.signal_bus.status_message.connect(self.show_status)
@@ -124,16 +114,20 @@ class MainWindow(QMainWindow):
             self.signal_bus.log_message.emit(bridge_warning)
             self.signal_bus.status_message.emit("Browser bridge disabled for this session.")
 
+        self._update_runtime_summary()
+        self._update_result_metadata(None)
+        self._update_action_states()
+
     def open_settings(self) -> None:
-        dlg = SettingsDialog(self, on_saved=self.telemetry.reload_preferences)
+        dlg = SettingsDialog(self, on_saved=self._on_settings_saved)
         dlg.exec()
 
     def start_generation(self) -> None:
         topic = self.topic_input.text().strip()
-        context = self.context_input.toPlainText().strip()
+        context = self._compose_context()
 
         if not topic:
-            self.log_message("Please enter a topic.")
+            self.show_status("Please enter a topic / query.")
             return
 
         if self._ai_worker and self._ai_worker.isRunning():
@@ -143,16 +137,22 @@ class MainWindow(QMainWindow):
         self.telemetry.flush_output_time()
         self.telemetry.emit_generation(topic, context)
 
-        self.generate_btn.setEnabled(False)
-        self.output_area.setText(
-            f"Starting research on '{topic}'... This may take a minute."
-        )
+        self.show_status("Researching...")
+        self._append_activity(f"Starting brief generation for: {topic}")
+        self.output_area.clear()
+        self._has_result = False
+        self._set_result_placeholder(f"Starting research on '{topic}'... This may take a minute.")
 
-        api_keys = {
-            "openai_api_key": get_secret("openai_api_key"),
-            "serper_api_key": get_secret("serper_api_key"),
-        }
+        api_keys = self._current_api_keys()
+        search_mode = resolve_search_mode(api_keys=api_keys)
+        self._update_runtime_summary(search_mode=search_mode)
         self.signal_bus.log_message.emit(describe_search_mode(api_keys=api_keys))
+        self._update_result_metadata(
+            topic,
+            search_mode=search_mode,
+            state="Running",
+            grounded=self._is_current_date_grounded(topic),
+        )
 
         self._ai_worker = AIWorker(topic, context, self.user_id, self.session_id, api_keys)
         self._ai_worker.progress_update.connect(self.signal_bus.progress_update)
@@ -160,6 +160,7 @@ class MainWindow(QMainWindow):
         self._ai_worker.result_ready.connect(self.signal_bus.result_ready)
         self._ai_worker.finished.connect(self.on_ai_finished)
         self._ai_worker.start()
+        self._update_action_states()
 
     def start_ocr(self, image) -> None:
         if self._ocr_worker and self._ocr_worker.isRunning():
@@ -170,45 +171,67 @@ class MainWindow(QMainWindow):
         self._ocr_worker.result_ready.connect(self.signal_bus.ocr_result)
         self._ocr_worker.error_message.connect(self.signal_bus.ocr_error)
         self._ocr_worker.start()
+        self._append_activity("OCR started.")
 
     def show_status(self, message: str) -> None:
         self.statusBar().showMessage(message, 5000)
+        self.ui.status_label.setText(f"Status: {message}")
 
     def log_message(self, message: str) -> None:
-        self.output_area.append(message)
+        self._append_activity(message)
 
     def on_ai_progress(self, progress: int) -> None:
-        self.statusBar().showMessage(f"Progress: {progress}%", 3000)
+        self.show_status(f"Progress: {progress}%")
 
     def on_ai_result(self, result: str) -> None:
         if result:
             self.output_area.setMarkdown(result)
             self.telemetry.mark_output_start()
+            topic = self.topic_input.text().strip()
+            search_mode = resolve_search_mode(api_keys=self._current_api_keys())
+            self._update_result_metadata(
+                topic,
+                search_mode=search_mode,
+                state="Completed",
+                grounded=self._is_current_date_grounded(topic),
+            )
+            self._has_result = True
+            self.show_status("Result ready.")
         else:
-            self.output_area.setText("No output generated.")
+            self._has_result = False
+            self._set_result_placeholder("No output generated.")
+            self._update_result_metadata(
+                self.topic_input.text().strip(),
+                search_mode=resolve_search_mode(api_keys=self._current_api_keys()),
+                state="No result",
+                grounded=self._is_current_date_grounded(self.topic_input.text().strip()),
+            )
+        self._update_action_states()
 
     def on_ai_finished(self) -> None:
-        self.generate_btn.setEnabled(True)
+        if not self.output_area.toPlainText().strip():
+            self.show_status("Ready.")
+        self._update_action_states()
 
     def on_ocr_result(self, text: str) -> None:
         if text:
-            self.output_area.append("OCR Result:\n" + text)
+            self._append_activity("OCR text attached.")
             self._append_context("Screen OCR", text)
         else:
-            self.output_area.append("OCR completed with no text detected.")
+            self._append_activity("OCR completed with no text detected.")
 
     def on_ocr_error(self, message: str) -> None:
-        self.output_area.append(message)
+        self._append_activity(message)
 
     def on_ingest_payload(self, payload: dict) -> None:
         url = payload.get("url") or ""
         text = payload.get("text") or ""
         if url:
-            self.output_area.append(f"Ingestion received: {url}")
+            self._append_activity(f"Ingestion received: {url}")
             self._append_context("Bridge URL", url)
         if text:
             preview = text[:200] + ("..." if len(text) > 200 else "")
-            self.output_area.append(f"Ingested text preview: {preview}")
+            self._append_activity(f"Ingested text preview: {preview}")
             self._append_context("Bridge Text", text)
 
     def activate_snipper(self) -> None:
@@ -255,6 +278,7 @@ class MainWindow(QMainWindow):
             elif status == "failed":
                 error = message.get("error") or "Bridge failed."
                 self._disable_bridge(error)
+            self._update_runtime_summary()
 
     def _check_bridge_health(self) -> None:
         if self._bridge_disabled:
@@ -278,6 +302,7 @@ class MainWindow(QMainWindow):
         self.signal_bus.status_message.emit("Browser bridge disabled.")
         if self._api_stop_event is not None:
             self._api_stop_event.set()
+        self._update_runtime_summary()
 
     def _append_context(self, label: str, content: str) -> None:
         content = content.strip()
@@ -287,9 +312,8 @@ class MainWindow(QMainWindow):
         if block in self._context_fragments:
             return
         self._context_fragments.append(block)
-        current = self.context_input.toPlainText().strip()
-        combined = "\n\n".join([current] + self._context_fragments if current else self._context_fragments)
-        self.context_input.setPlainText(combined)
+        self.ui.attached_context_area.setPlainText("\n\n".join(self._context_fragments))
+        self._append_activity(f"Attached context added from {label}.")
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls():
@@ -328,3 +352,130 @@ class MainWindow(QMainWindow):
                 self._api_process.join(timeout=1)
 
         super().closeEvent(event)
+
+    def copy_result(self) -> None:
+        markdown = self._current_output_markdown().strip()
+        if not markdown:
+            self.show_status("No result to copy.")
+            return
+        QApplication.clipboard().setText(markdown)
+        self._append_activity("Result copied to clipboard.")
+
+    def clear_result(self) -> None:
+        self.output_area.clear()
+        self._has_result = False
+        self._update_result_metadata(None)
+        self._append_activity("Result cleared.")
+        self._update_action_states()
+
+    def save_result_as_markdown(self) -> None:
+        markdown = self._current_output_markdown().strip()
+        if not markdown:
+            self.show_status("No result to save.")
+            return
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Save Brief",
+            "lumeward-brief.md",
+            "Markdown Files (*.md);;Text Files (*.txt)",
+        )
+        if not path:
+            return
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(markdown)
+        self._append_activity(f"Result saved to {path}.")
+        self.show_status("Brief saved.")
+
+    def _compose_context(self) -> str:
+        parts: list[str] = []
+        manual_guidance = self.context_input.toPlainText().strip()
+        if manual_guidance:
+            parts.append(manual_guidance)
+        parts.extend(self._context_fragments)
+        return "\n\n".join(parts).strip()
+
+    def _apply_guidance_preset(self, preset_text: str) -> None:
+        current = self.context_input.toPlainText().strip()
+        if preset_text in current:
+            return
+        updated = f"{current}\n{preset_text}".strip() if current else preset_text
+        self.context_input.setPlainText(updated)
+        self._append_activity(f"Guidance preset applied: {preset_text}")
+
+    def _append_activity(self, message: str) -> None:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.ui.activity_area.append(f"[{timestamp}] {message}")
+
+    def _current_api_keys(self) -> dict[str, str | None]:
+        return {
+            "openai_api_key": get_secret("openai_api_key"),
+            "serper_api_key": get_secret("serper_api_key"),
+        }
+
+    def _update_runtime_summary(self, *, search_mode: str | None = None) -> None:
+        resolved_search_mode = search_mode or resolve_search_mode(api_keys=self._current_api_keys())
+        search_label = {
+            "serper": "Serper",
+            "fallback": "Fallback",
+            "disabled": "Disabled",
+        }.get(resolved_search_mode, resolved_search_mode.title())
+        bridge_label = "Disabled"
+        if self._api_process is not None and not self._bridge_disabled:
+            bridge_label = "Ready" if self._bridge_started else "Starting"
+        elif self._api_process is None and not self._bridge_disabled:
+            bridge_label = "Unavailable"
+        self.ui.capability_label.setText(f"Search: {search_label} | Bridge: {bridge_label}")
+
+    def _update_result_metadata(
+        self,
+        topic: str | None,
+        *,
+        search_mode: str | None = None,
+        state: str = "Idle",
+        grounded: bool = False,
+    ) -> None:
+        if not topic:
+            self.ui.result_meta_label.setText("No result generated yet.")
+            return
+        search_label = {
+            "serper": "Serper",
+            "fallback": "Fallback",
+            "disabled": "Disabled",
+            None: "Unknown",
+        }[search_mode] if search_mode in {"serper", "fallback", "disabled"} or search_mode is None else search_mode
+        generated_at = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        grounded_text = "Yes" if grounded else "No"
+        self.ui.result_meta_label.setText(
+            f"State: {state} | Generated: {generated_at} | Search: {search_label} | Current-date grounded: {grounded_text}"
+        )
+
+    def _current_output_markdown(self) -> str:
+        if hasattr(self.output_area, "toMarkdown"):
+            return self.output_area.toMarkdown()
+        return self.output_area.toPlainText()
+
+    def _set_result_placeholder(self, message: str) -> None:
+        self.output_area.setPlainText(message)
+
+    def _is_current_date_grounded(self, topic: str) -> bool:
+        lowered = topic.lower()
+        return any(term in lowered for term in TIME_SENSITIVE_TERMS)
+
+    def _on_settings_saved(self) -> None:
+        self.telemetry.reload_preferences()
+        app = QApplication.instance()
+        if app is not None:
+            apply_app_theme(app, get_theme_mode())
+        self._append_activity("Settings saved.")
+        self._update_runtime_summary()
+        self._update_action_states()
+
+    def _update_action_states(self) -> None:
+        has_topic = bool(self.topic_input.text().strip())
+        has_output = self._has_result and bool(self.output_area.toPlainText().strip())
+        running = self._ai_worker is not None and self._ai_worker.isRunning()
+        self.generate_btn.setEnabled(has_topic and not running)
+        self.ui.regenerate_btn.setEnabled(has_topic and not running)
+        self.ui.copy_btn.setEnabled(has_output)
+        self.ui.clear_btn.setEnabled(has_output)
+        self.ui.save_btn.setEnabled(has_output)
